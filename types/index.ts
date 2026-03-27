@@ -60,6 +60,13 @@ export interface UserProfile {
 
   // Dependent details
   dependentCoverageEndDate?: string
+  dependentOnWhom?: 'parent' | 'spouse' | 'partner'
+  parentPlanInsurer?: string
+  parentPlanType?: 'hmo' | 'ppo' | 'hdhp' | 'epo' | 'unknown'
+  parentPlanDeductible?: 'under_500' | '500_to_1500' | '1500_to_3000' | 'over_3000' | 'unknown'
+  parentPlanPremiumContribution?: '0' | 'under_100' | '100_to_300' | 'over_300' | 'unknown'
+  parentPlanSatisfied?: 'very_happy' | 'somewhat_happy' | 'unhappy'
+  agingOffDate?: 'over_2_years' | '1_to_2_years' | 'under_1_year' | 'already_aged_off' | 'unknown'
 
   // Green card timing
   yearsAsLPR?: number
@@ -139,6 +146,7 @@ export type PlanType =
   | 'cobra'
   | 'medicare'
   | 'va'
+  | 'parent_plan'
   | 'none'
 
 export interface SubsidyDetails {

@@ -7,6 +7,8 @@ interface Props {
   plans: PlanCard[]
   loading: boolean
   estimates?: CostEstimate[]
+  compareList?: string[]
+  onToggleCompare?: (planId: string) => void
 }
 
 const NETWORK_COLORS: Record<string, string> = {
@@ -67,7 +69,13 @@ function StarRating({ rating }: { rating?: number }) {
   )
 }
 
-function PlanCardItem({ plan, isBest, annualTotal }: { plan: PlanCard; isBest: boolean; annualTotal?: { low: number; high: number } }) {
+function PlanCardItem({ plan, isBest, annualTotal, inCompare, onToggleCompare }: {
+  plan: PlanCard
+  isBest: boolean
+  annualTotal?: { low: number; high: number }
+  inCompare?: boolean
+  onToggleCompare?: (planId: string) => void
+}) {
   const [expanded, setExpanded] = useState(false)
   const [saved, setSaved] = useState(false)
 
@@ -282,16 +290,24 @@ function PlanCardItem({ plan, isBest, annualTotal }: { plan: PlanCard; isBest: b
           >
             <Bookmark className={`w-4 h-4 ${saved ? 'fill-brand-500' : ''}`} />
           </button>
-          <button className="p-2.5 rounded-xl border border-gray-200 text-gray-400 hover:border-gray-300 transition-all">
-            <GitCompare className="w-4 h-4" />
-          </button>
+          {onToggleCompare && (
+            <button
+              onClick={() => onToggleCompare(plan.id)}
+              title={inCompare ? 'Remove from comparison' : 'Add to comparison'}
+              className={`p-2.5 rounded-xl border transition-all ${
+                inCompare ? 'border-brand-300 bg-brand-50 text-brand-600' : 'border-gray-200 text-gray-400 hover:border-gray-300'
+              }`}
+            >
+              <GitCompare className={`w-4 h-4 ${inCompare ? 'fill-brand-100' : ''}`} />
+            </button>
+          )}
         </div>
       </div>
     </div>
   )
 }
 
-export default function PlanCards({ plans, loading, estimates = [] }: Props) {
+export default function PlanCards({ plans, loading, estimates = [], compareList = [], onToggleCompare }: Props) {
   if (loading) {
     return (
       <div className="space-y-4">
@@ -329,6 +345,8 @@ export default function PlanCards({ plans, loading, estimates = [] }: Props) {
             plan={plan}
             isBest={plan.isPrimaryRecommendation === true}
             annualTotal={est?.estimatedAnnualTotal}
+            inCompare={compareList.includes(plan.id)}
+            onToggleCompare={onToggleCompare}
           />
         )
       })}

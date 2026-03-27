@@ -245,6 +245,28 @@ Enrollment tip: ${match.data.enrollmentTip}
 When discussing coverage options, reference these plans by name and use the notes above to give accurate, specific guidance.`
 })()}
 
+${userProfile.employmentStatus === 'dependent' ? `
+## Dependent plan context
+The user is currently on a dependent plan. Here are the specific details they provided:
+- Plan holder: ${userProfile.dependentOnWhom ?? 'parent/spouse'}
+- Insurance company: ${userProfile.parentPlanInsurer ?? 'not specified'}
+- Plan type: ${userProfile.parentPlanType ?? 'not specified'}
+- Deductible: ${userProfile.parentPlanDeductible ?? 'not specified'}
+- Monthly cost to user: ${userProfile.parentPlanPremiumContribution ?? 'not specified'}
+- Satisfaction: ${userProfile.parentPlanSatisfied ?? 'not specified'}
+- Aging off timeline: ${userProfile.agingOffDate ?? 'not specified'}
+
+When discussing their options always reference these specific plan details by name.
+${userProfile.parentPlanSatisfied === 'very_happy' && userProfile.parentPlanPremiumContribution === '0'
+  ? 'This user appears to have excellent, free coverage — validate that staying on the plan is correct and explain why switching would likely cost them more.'
+  : ''}
+${userProfile.agingOffDate === 'already_aged_off' || userProfile.agingOffDate === 'under_1_year'
+  ? 'IMPORTANT: The user is approaching or has reached age 26 and needs to transition off this plan. Make this the TOP PRIORITY in every response. They have a 60-day Special Enrollment Period triggered by losing dependent coverage. Walk them through their best transition options immediately.'
+  : ''}
+${userProfile.agingOffDate === '1_to_2_years'
+  ? 'The user will age off their parent\'s plan within 1–2 years. Proactively mention the aging-off timeline when relevant and help them understand their future options.'
+  : ''}
+` : ''}
 Always use this profile as full context. Never ask for information already provided here.
 When discussing plans, tailor recommendations to their benefit priorities (${
     Array.isArray(userProfile.benefitPriorities) ? (userProfile.benefitPriorities as string[]).join(', ') : 'none specified'

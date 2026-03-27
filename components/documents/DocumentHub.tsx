@@ -17,15 +17,23 @@ const DOC_TYPE_LABELS: Record<string, string> = {
 const ACCEPTED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp']
 const MAX_MB = 10
 
+interface DenialSignal {
+  planName: string
+  denialReason: string
+  denialDate: string
+  serviceDescription: string
+}
+
 interface Props {
   userProfile: UserProfile
   documents: ParsedDocument[]
   onDocumentsChange: (docs: ParsedDocument[]) => void
+  onDenialDetected?: (denial: DenialSignal) => void
 }
 
 type DocTab = 'upload' | 'compare'
 
-export default function DocumentHub({ userProfile, documents, onDocumentsChange }: Props) {
+export default function DocumentHub({ userProfile, documents, onDocumentsChange, onDenialDetected }: Props) {
   const [docTab, setDocTab] = useState<DocTab>('upload')
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -70,6 +78,25 @@ export default function DocumentHub({ userProfile, documents, onDocumentsChange 
         const parsed: ParsedDocument = await res.json()
         onDocumentsChange([...documents, parsed])
         setExpandedDoc(parsed.id)
+
+        // Detect denials and surface the appeal assistant
+        const isDenialDoc = parsed.documentType === 'appeal_letter' ||
+          parsed.documentType === 'eob' ||
+          parsed.summary.toLowerCase().includes('denied') ||
+          parsed.summary.toLowerCase().includes('denial') ||
+          parsed.extractedFields.some(f => f.flagged && (f.label.toLowerCase().includes('denial') || f.label.toLowerCase().includes('denied')))
+        if (isDenialDoc && onDenialDetected) {
+          const denialField = parsed.extractedFields.find(f => f.label.toLowerCase().includes('denial reason') || f.label.toLowerCase().includes('reason for denial'))
+          const dateField = parsed.extractedFields.find(f => f.label.toLowerCase().includes('denial date') || f.label.toLowerCase().includes('date of denial'))
+          const planField = parsed.extractedFields.find(f => f.label.toLowerCase().includes('plan') || f.label.toLowerCase().includes('insurer'))
+          const serviceField = parsed.extractedFields.find(f => f.label.toLowerCase().includes('service') || f.label.toLowerCase().includes('procedure'))
+          onDenialDetected({
+            planName: planField?.value ?? '',
+            denialReason: denialField?.value ?? parsed.summary,
+            denialDate: dateField?.value ?? '',
+            serviceDescription: serviceField?.value ?? '',
+          })
+        }
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to parse document.')
       } finally {

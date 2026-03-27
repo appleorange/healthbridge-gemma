@@ -427,6 +427,44 @@ export function estimateCosts(profile: UserProfile, eligiblePlans: PlanType[]): 
     }
 
     // ── All other plan types: generic config table ──
+    // ── Parent plan: use collected plan details ──
+    if (plan === 'parent_plan') {
+      const premMap: Record<string, number> = { '0': 0, 'under_100': 50, '100_to_300': 200, 'over_300': 350, 'unknown': 100 }
+      const dedMap: Record<string, [number, number]> = {
+        'under_500': [0, 500], '500_to_1500': [500, 1500],
+        '1500_to_3000': [1500, 3000], 'over_3000': [3000, 6000], 'unknown': [500, 3000],
+      }
+      const monthlyPrem = premMap[profile.parentPlanPremiumContribution ?? 'unknown'] ?? 100
+      const [oopLow, oopHigh] = dedMap[profile.parentPlanDeductible ?? 'unknown'] ?? [500, 3000]
+      const visitCopay = profile.parentPlanType === 'hmo' ? 20 : profile.parentPlanType === 'ppo' ? 25 : 30
+      const oop = computeOop(profile, oopLow, oopHigh, visitCopay, 0.25)
+      const annualPrem = monthlyPrem * 12
+      const insurer = profile.parentPlanInsurer ?? "Parent/spouse's plan"
+      const typeLabel = profile.parentPlanType && profile.parentPlanType !== 'unknown'
+        ? ` (${profile.parentPlanType.toUpperCase()})`
+        : ''
+      estimates.push({
+        planType: 'parent_plan',
+        planLabel: `${insurer}${typeLabel}`,
+        estimatedMonthlyPremium: { low: monthlyPrem, high: monthlyPrem },
+        estimatedAnnualOutOfPocket: oop,
+        estimatedAnnualTotal: {
+          low: Math.round(annualPrem + oop.low),
+          high: Math.round(annualPrem + oop.high),
+        },
+        subsidyApplied: 0,
+        assumptions: [
+          ...oopAssumptions(profile),
+          monthlyPrem === 0
+            ? 'Your portion of the premium is $0 — fully covered by the plan holder\'s employer'
+            : `Your monthly contribution: $${monthlyPrem}/mo`,
+          `Deductible range: $${oopLow.toLocaleString()}–$${oopHigh.toLocaleString()}`,
+        ],
+        bestFor: 'Current coverage — compare against alternatives before switching',
+      })
+      continue
+    }
+
     const genericConfigs: Partial<Record<PlanType, {
       premiumLow: number; premiumHigh: number
       oopMaxLow: number; oopMaxHigh: number

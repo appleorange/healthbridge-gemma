@@ -101,11 +101,58 @@ function buildBestOptionReasoning(
       parts.push('Treat this as a temporary bridge only. Continue looking for a more comprehensive option — gaps in coverage add up quickly if you need care.')
       break
 
+    case 'parent_plan': {
+      const insurer = profile.parentPlanInsurer ? `your ${profile.parentPlanInsurer}` : "your parent/spouse's"
+      const planTypeLabel = profile.parentPlanType && profile.parentPlanType !== 'unknown'
+        ? ` ${profile.parentPlanType.toUpperCase()}` : ''
+      parts.push(`Staying on ${insurer}${planTypeLabel} plan is your best option right now.`)
+      if (profile.parentPlanPremiumContribution === '0') {
+        parts.push("Since it costs you nothing, this is hard to beat — any alternative plan would add a monthly premium to your budget.")
+      }
+      if (profile.parentPlanSatisfied === 'very_happy') {
+        parts.push("You've indicated you're happy with the coverage, which confirms this is working well for you.")
+      }
+      if (profile.agingOffDate && profile.agingOffDate !== 'over_2_years' && profile.agingOffDate !== 'unknown') {
+        parts.push("Keep in mind you'll need to transition off this plan when you turn 26 — start planning that transition in advance.")
+      }
+      break
+    }
+
     default:
       parts.push('Based on your profile, review the available options carefully and consider speaking with a navigator for personalized guidance.')
   }
 
   return parts.join(' ')
+}
+
+function evaluateParentPlan(profile: UserProfile, fplPct: number): 'stay' | 'consider_switching' | 'switch' {
+  let stayScore = 0
+  let switchScore = 0
+
+  // Strong signals to stay
+  if (profile.parentPlanSatisfied === 'very_happy') stayScore += 3
+  if (profile.parentPlanPremiumContribution === '0') stayScore += 3
+  if (profile.agingOffDate === 'over_2_years') stayScore += 2
+  if (profile.parentPlanType === 'ppo') stayScore += 1
+  if (profile.parentPlanSatisfied === 'somewhat_happy') stayScore += 1
+
+  // Strong signals to switch
+  if (profile.agingOffDate === 'already_aged_off') switchScore += 5
+  if (profile.agingOffDate === 'under_1_year') switchScore += 3
+  if (profile.parentPlanSatisfied === 'unhappy') switchScore += 3
+  if (
+    profile.parentPlanPremiumContribution === 'over_300' &&
+    fplPct >= 100 && fplPct <= 400
+  ) switchScore += 2
+  if (
+    profile.parentPlanType === 'hmo' &&
+    Array.isArray(profile.benefitPriorities) &&
+    profile.benefitPriorities.includes('specialist_access')
+  ) switchScore += 2
+
+  if (switchScore >= 4) return 'switch'
+  if (switchScore >= 2 || stayScore < 2) return 'consider_switching'
+  return 'stay'
 }
 
 export function calculateEligibility(profile: UserProfile): EligibilityResult {
@@ -427,6 +474,23 @@ export function calculateEligibility(profile: UserProfile): EligibilityResult {
     })
   }
 
+  // ── Dependent: add parent_plan to eligible so it appears in cost estimates ──
+  if (profile.employmentStatus === 'dependent') {
+    eligible.push('parent_plan')
+    const insurer = profile.parentPlanInsurer ?? "parent/spouse's"
+    const typeLabel = profile.parentPlanType && profile.parentPlanType !== 'unknown'
+      ? ` ${profile.parentPlanType.toUpperCase()}` : ''
+    addNode({
+      id: 'parent_plan',
+      label: "Parent/spouse's plan",
+      subtitle: `${insurer}${typeLabel} plan`,
+      type: 'result',
+      status: 'pending', // will be updated after evaluateParentPlan
+      explanation: 'You are currently covered as a dependent. Evaluation in progress based on your plan details.',
+      profileData: `Dependent on: ${profile.dependentOnWhom ?? 'parent/spouse'} · insurer: ${profile.parentPlanInsurer ?? 'unknown'} · type: ${profile.parentPlanType ?? 'unknown'} · cost: $${profile.parentPlanPremiumContribution ?? '?'}/mo`,
+    }, 'start', 'Dependent coverage')
+  }
+
   // Run cost estimation across all eligible plans
   const costEstimates = estimateCosts(profile, eligible)
 
@@ -449,6 +513,71 @@ export function calculateEligibility(profile: UserProfile): EligibilityResult {
     }
   }
 
+  // ── Dependent: evaluate parent plan vs alternatives ──
+  if (profile.employmentStatus === 'dependent') {
+    const parentRec = evaluateParentPlan(profile, fplPct)
+    const insurer = profile.parentPlanInsurer ?? "parent/spouse's"
+    const typeLabel = profile.parentPlanType && profile.parentPlanType !== 'unknown'
+      ? ` ${profile.parentPlanType.toUpperCase()}` : ''
+    const planDesc = `${insurer}${typeLabel} plan`
+
+    // Update the parent_plan node status based on recommendation
+    const ppNode = nodes.find(n => n.id === 'parent_plan')
+    if (ppNode) {
+      ppNode.status = parentRec === 'stay' ? 'eligible' : parentRec === 'consider_switching' ? 'pending' : 'ineligible'
+      ppNode.primaryPath = parentRec === 'stay'
+      ppNode.whatWouldChange = parentRec === 'stay'
+        ? "A significant change — like aging off at 26, losing satisfaction with coverage, or finding a cheaper option with subsidy — would change this recommendation."
+        : parentRec === 'consider_switching'
+        ? "Compare this plan side-by-side with your alternative options in the Cost Estimate tab."
+        : "Transitioning to your own coverage is recommended given your current situation."
+      ppNode.explanation = parentRec === 'stay'
+        ? `Staying on ${planDesc} is your best option based on the details you provided.`
+        : parentRec === 'consider_switching'
+        ? `You may want to compare ${planDesc} against alternatives. See the Cost Estimate tab.`
+        : `Transitioning off ${planDesc} is recommended — see next steps below.`
+    }
+
+    if (parentRec === 'stay') {
+      adjustedPrimary = 'parent_plan'
+      circumstances.push(
+        `Based on what you told us about your ${planDesc}, staying on it appears to be your best option right now.`
+      )
+      nextSteps.push({
+        id: 'review_annual',
+        title: 'Review your coverage annually',
+        description: 'Especially as you approach age 26 — start exploring your own options at least 6 months before you lose eligibility.',
+        priority: 'low',
+      })
+    } else if (parentRec === 'consider_switching') {
+      const reasons: string[] = []
+      if (profile.agingOffDate === '1_to_2_years') reasons.push('your approaching age limit')
+      if (profile.parentPlanSatisfied === 'somewhat_happy') reasons.push('the coverage gaps you mentioned')
+      if (profile.parentPlanPremiumContribution === 'over_300') reasons.push('the high monthly cost to you')
+      const reasonText = reasons.length > 0 ? reasons.join(' and ') : 'your specific situation'
+      const ALT_LABELS: Partial<Record<PlanType, string>> = {
+        aca_marketplace: 'an ACA marketplace plan', medicaid: 'Medicaid',
+        employer_sponsored: 'an employer-sponsored plan', school_plan: 'a school plan',
+      }
+      const altLabel = ALT_LABELS[adjustedPrimary as PlanType] ?? String(adjustedPrimary).replace(/_/g, ' ')
+      circumstances.push(
+        `You're currently on your ${planDesc}. Based on your profile, you may want to compare it against ${altLabel} — especially given ${reasonText}.`
+      )
+    } else {
+      const reasons: string[] = []
+      if (profile.agingOffDate === 'already_aged_off') reasons.push('you have already aged off or are about to age off')
+      else if (profile.agingOffDate === 'under_1_year') reasons.push("you're within a year of aging off at 26")
+      else if (profile.parentPlanSatisfied === 'unhappy') reasons.push("you're not satisfied with your current coverage")
+      const reason = reasons[0] ?? 'based on your situation'
+      nextSteps.push({
+        id: 'transition_now',
+        title: "Transition off your parent's plan — act now",
+        description: `You should transition off your ${planDesc} — ${reason}. Losing dependent coverage is a qualifying life event giving you 60 days to enroll in a new plan.`,
+        priority: 'high',
+      })
+    }
+  }
+
   const bestOptionReasoning = buildBestOptionReasoning(adjustedPrimary, profile, fplPct, eligible)
 
   // ── Mark primary path nodes ──
@@ -458,6 +587,7 @@ export function calculateEligibility(profile: UserProfile): EligibilityResult {
     : adjustedPrimary === 'school_plan' ? 'school_plan'
     : adjustedPrimary === 'international_student_plan' ? 'isp'
     : adjustedPrimary === 'cobra' ? 'cobra_result'
+    : adjustedPrimary === 'parent_plan' ? 'parent_plan'
     : 'short_term'
 
   // Walk from primary result back to start via edges and mark all as primaryPath

@@ -23,7 +23,7 @@ Eligibility result:
 ${JSON.stringify({ primaryRecommendation: eligibilityResult.primaryRecommendation, eligiblePlans: eligibilityResult.eligiblePlans, specialCircumstances: eligibilityResult.specialCircumstances }, null, 2)}`
 
     const message = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 1000,
       messages: [{ role: 'user', content: prompt }],
     })

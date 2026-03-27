@@ -12,6 +12,7 @@ const PLAN_READABLE: Partial<Record<string, string>> = {
   cobra: 'COBRA continuation',
   short_term: 'short-term plan',
   medicare: 'Medicare',
+  parent_plan: "parent/spouse's plan",
 }
 
 function generateEvents(profile: UserProfile, eligibilityResult: EligibilityResult): TimelineEvent[] {
@@ -244,6 +245,57 @@ function generateEvents(profile: UserProfile, eligibilityResult: EligibilityResu
         type: 'action',
         status: 'upcoming',
         urgent: false,
+      })
+    }
+  }
+
+  // --- Aging off parent plan ---
+  if (
+    profile.employmentStatus === 'dependent' &&
+    profile.dependentOnWhom === 'parent' &&
+    profile.agingOffDate &&
+    profile.agingOffDate !== 'over_2_years' &&
+    profile.agingOffDate !== 'unknown'
+  ) {
+    if (profile.agingOffDate === 'already_aged_off') {
+      events.push({
+        id: 'aging_off',
+        title: "You've aged off (or are aging off) your parent's plan — act immediately",
+        description: "You have aged off or are about to age off your parent's plan. This triggers a 60-day Special Enrollment Period — act immediately to avoid a gap in coverage. Losing dependent coverage qualifies you to enroll in an ACA marketplace plan, your own employer plan, or Medicaid outside of Open Enrollment.",
+        date: todayStr,
+        type: 'sep',
+        status: 'action_required',
+        urgent: true,
+        actionLabel: 'Find a plan now',
+        actionUrl: 'https://www.healthcare.gov',
+      })
+    } else if (profile.agingOffDate === 'under_1_year') {
+      const transitionDate = new Date(today)
+      transitionDate.setMonth(transitionDate.getMonth() + 6)
+      events.push({
+        id: 'aging_off',
+        title: "Aging off parent's plan — under 1 year away",
+        description: "You're approaching the age 26 cutoff for your parent's plan. Losing dependent coverage is a qualifying life event — you'll have 60 days to enroll in a new plan. Start comparing options now so you're not caught off guard when the transition arrives.",
+        date: transitionDate.toISOString().split('T')[0],
+        type: 'action',
+        status: 'action_required',
+        urgent: true,
+        actionLabel: 'Compare plans',
+        actionUrl: 'https://www.healthcare.gov',
+      })
+    } else if (profile.agingOffDate === '1_to_2_years') {
+      const transitionDate = new Date(today)
+      transitionDate.setMonth(transitionDate.getMonth() + 12)
+      events.push({
+        id: 'aging_off',
+        title: "Aging off parent's plan — 1–2 years away",
+        description: "You have 1–2 years before aging off your parent's plan at 26. Start researching your options now so you're ready when the time comes. Employer plans, ACA marketplace, and Medicaid are the most common paths after aging off.",
+        date: transitionDate.toISOString().split('T')[0],
+        type: 'action',
+        status: 'upcoming',
+        urgent: false,
+        actionLabel: 'Start comparing',
+        actionUrl: 'https://www.healthcare.gov',
       })
     }
   }
