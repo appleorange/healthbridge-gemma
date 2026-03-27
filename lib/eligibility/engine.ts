@@ -1,5 +1,6 @@
 import type { UserProfile, EligibilityResult, PlanType, FlowchartNode, FlowchartEdge, NextStep } from '@/types'
 import { estimateCosts } from '@/lib/calculators/cost-estimator'
+import { matchEmployerPlans } from '@/lib/plans/plan-finder'
 
 // States that have expanded Medicaid to cover specific immigrant groups
 const MEDICAID_EXPANSION_STATES = [
@@ -116,181 +117,217 @@ export function calculateEligibility(profile: UserProfile): EligibilityResult {
   const edges: FlowchartEdge[] = []
   const fplPct = getFPLPercentage(profile.annualIncome, profile.householdSize)
 
-  // Build flowchart as we evaluate
-  nodes.push({
+  // ── Helper: add node and register edge from parent ──
+  function addNode(node: FlowchartNode, parentId?: string, edgeLabel?: string) {
+    nodes.push(node)
+    if (parentId) {
+      edges.push({ from: parentId, to: node.id, label: edgeLabel })
+      // Maintain children array on parent
+      const parent = nodes.find(n => n.id === parentId)
+      if (parent) {
+        parent.children = [...(parent.children ?? []), node.id]
+      }
+    }
+  }
+
+  // ── Start node ──
+  const startNode: FlowchartNode = {
     id: 'start',
     label: 'Immigration status',
     subtitle: formatStatus(profile.immigrationStatus),
     type: 'question',
     status: 'active',
+    primaryPath: true,
     explanation: 'Your immigration status is the primary determinant of which health insurance options are available to you in the United States.',
-  })
+    profileData: `Status: ${formatStatus(profile.immigrationStatus)}`,
+    children: [],
+  }
+  nodes.push(startNode)
 
-  // --- ACA / Marketplace eligibility ---
+  // ── ACA / Marketplace eligibility ──
   const acaEligibleStatuses = ['us_citizen', 'green_card', 'refugee_asylee', 'l1', 'o1', 'tn']
   const acaEligible = acaEligibleStatuses.includes(profile.immigrationStatus)
 
-  nodes.push({
-    id: 'aca_check',
-    label: 'ACA marketplace eligible?',
-    subtitle: 'Requires lawful presence',
-    type: 'question',
-    status: acaEligible ? 'eligible' : 'ineligible',
-    explanation: 'The ACA marketplace requires "lawful presence" status. This includes citizens, green card holders, refugees, asylees, and certain other visa categories. F-1, J-1, H-1B, and undocumented individuals are generally excluded from marketplace subsidies.',
-    legalBasis: '45 CFR § 155.305; ACA Section 1312(f)(3)',
-  })
-  edges.push({ from: 'start', to: 'aca_check', label: 'Determines' })
-
   if (acaEligible) {
     eligible.push('aca_marketplace')
-    nodes.push({
+    const subsidyEligible = fplPct >= 100 && fplPct <= 400 && !profile.hasEmployerInsurance
+    const acaChildren: string[] = subsidyEligible ? ['subsidy'] : []
+    addNode({
       id: 'aca_result',
       label: 'ACA marketplace',
       subtitle: 'Healthcare.gov or state exchange',
       type: 'result',
       status: 'eligible',
-      explanation: 'You can purchase a plan on the ACA marketplace. Open enrollment runs Nov 1 – Jan 15. You may also qualify for a Premium Tax Credit based on your income.',
-    })
-    edges.push({ from: 'aca_check', to: 'aca_result', label: 'Yes' })
+      explanation: 'You can purchase a plan on the ACA marketplace. Open enrollment runs Nov 1 – Jan 15. You may qualify for a Premium Tax Credit based on your income.',
+      children: acaChildren,
+      profileData: `Status: ${formatStatus(profile.immigrationStatus)} → lawfully present`,
+    }, 'start', 'ACA eligible')
 
-    // Subsidy check
-    const subsidyEligible = fplPct >= 100 && fplPct <= 400 && !profile.hasEmployerInsurance
     if (subsidyEligible) {
       circumstances.push(`You may qualify for a Premium Tax Credit — your income is approximately ${Math.round(fplPct)}% of the federal poverty level.`)
-      nodes.push({
+      addNode({
         id: 'subsidy',
-        label: 'Subsidy eligible',
-        subtitle: `~${Math.round(fplPct)}% FPL`,
+        label: 'Premium Tax Credit',
+        subtitle: `~${Math.round(fplPct)}% FPL — subsidy available`,
         type: 'result',
         status: 'eligible',
         explanation: 'Premium Tax Credits reduce your monthly premium. The amount depends on your income relative to the federal poverty level and the cost of the benchmark Silver plan in your area.',
         legalBasis: 'ACA Section 1401; 26 USC § 36B',
-      })
-      edges.push({ from: 'aca_result', to: 'subsidy', label: 'Income check' })
+        profileData: `Income $${profile.annualIncome.toLocaleString()} = ${Math.round(fplPct)}% FPL → qualifies (100–400% FPL range)`,
+      }, 'aca_result', 'Income check')
     }
   } else {
     ineligible.push('aca_marketplace')
-    nodes.push({
+    const acaIneligibleReason = profile.immigrationStatus === 'undocumented'
+      ? 'Undocumented individuals are excluded from ACA marketplace plans and subsidies'
+      : profile.immigrationStatus === 'daca'
+      ? 'DACA recipients are explicitly excluded from ACA marketplace eligibility under federal rules'
+      : `${formatStatus(profile.immigrationStatus)} is a non-immigrant status that does not meet the "lawfully present" standard`
+    addNode({
       id: 'aca_result',
       label: 'ACA marketplace',
-      subtitle: 'Not eligible',
+      subtitle: 'Not eligible — status requirement',
       type: 'result',
       status: 'ineligible',
-      explanation: 'Your visa status does not meet the "lawfully present" requirement under 45 CFR § 155.305. Non-immigrant visa holders (F-1, J-1, H-1B) and undocumented individuals cannot receive marketplace subsidies.',
+      explanation: `${acaIneligibleReason}. Non-immigrant visa holders (F-1, J-1, H-1B) and undocumented individuals cannot receive marketplace subsidies.`,
       legalBasis: '45 CFR § 155.305(a); ACA Section 1312(f)(3)',
-    })
-    edges.push({ from: 'aca_check', to: 'aca_result', label: 'No' })
+      whatWouldChange: 'A qualifying immigration status change (green card, citizenship, or refugee/asylee grant) would make you ACA marketplace eligible.',
+      profileData: `Status: ${formatStatus(profile.immigrationStatus)} → not in lawfully-present category`,
+    }, 'start', 'ACA check')
   }
 
-  // --- Medicaid eligibility ---
-  const medicaidEligibleStatuses = ['us_citizen', 'refugee_asylee']
+  // ── Medicaid eligibility ──
+  const medicaidStatusEligible = ['us_citizen', 'refugee_asylee'].includes(profile.immigrationStatus)
   const medicaidLPR = profile.immigrationStatus === 'green_card'
   const medicaidDACA = profile.immigrationStatus === 'daca' && DACA_MEDICAID_STATES.includes(profile.state)
-  const medicaidImmigrant = MEDICAID_EXPANSION_STATES.includes(profile.state) &&
-    ['green_card'].includes(profile.immigrationStatus)
-  const medicaidIncomePct = fplPct
-  const medicaidIncomeEligible = ACA_EXPANSION_STATES.includes(profile.state)
-    ? medicaidIncomePct <= 138
-    : medicaidIncomePct <= 100
+  const medicaidStatusQualifies = medicaidStatusEligible || medicaidLPR || medicaidDACA
+  const medicaidIncomeThreshold = ACA_EXPANSION_STATES.includes(profile.state) ? 138 : 100
+  const medicaidIncomeEligible = fplPct <= medicaidIncomeThreshold
 
-  const medicaidEligible = (
-    medicaidEligibleStatuses.includes(profile.immigrationStatus) ||
-    medicaidLPR ||
-    medicaidDACA ||
-    medicaidImmigrant
-  ) && medicaidIncomeEligible
+  const medicaidEligible = medicaidStatusQualifies && medicaidIncomeEligible
 
-  nodes.push({
-    id: 'medicaid_check',
-    label: 'Medicaid eligible?',
-    subtitle: 'Income + status based',
-    type: 'question',
-    status: medicaidEligible ? 'eligible' : 'ineligible',
-    explanation: 'Medicaid eligibility depends on both your immigration status and your income. Most non-immigrant visa holders (F-1, H-1B, J-1) are ineligible. Green card holders face a 5-year waiting period in most states.',
-    legalBasis: '8 USC § 1611; 8 USC § 1612; Social Security Act § 1903(v)',
-  })
-  edges.push({ from: 'start', to: 'medicaid_check' })
-
-  if (medicaidEligible) {
-    eligible.push('medicaid')
-    nodes.push({
+  if (medicaidStatusQualifies) {
+    // Status qualifies — determine if income is the gating factor
+    if (medicaidEligible) {
+      eligible.push('medicaid')
+      addNode({
+        id: 'medicaid_result',
+        label: 'Medicaid',
+        subtitle: 'Free or low-cost coverage',
+        type: 'result',
+        status: 'eligible',
+        explanation: 'You appear eligible for Medicaid. Apply through your state\'s Medicaid agency or Healthcare.gov. Coverage can start as soon as the month you apply.',
+        legalBasis: '42 USC § 1396a; Social Security Act § 1902',
+        profileData: `Income $${profile.annualIncome.toLocaleString()} = ${Math.round(fplPct)}% FPL → under ${medicaidIncomeThreshold}% threshold for ${profile.state}`,
+      }, 'start', 'Medicaid check')
+    } else {
+      ineligible.push('medicaid')
+      const inExpansionState = ACA_EXPANSION_STATES.includes(profile.state)
+      addNode({
+        id: 'medicaid_result',
+        label: 'Medicaid',
+        subtitle: `Income too high — ${Math.round(fplPct)}% FPL`,
+        type: 'result',
+        status: 'ineligible',
+        explanation: `Your income (${Math.round(fplPct)}% FPL) exceeds the Medicaid limit of ${medicaidIncomeThreshold}% FPL in ${profile.state}${inExpansionState ? ' (an expansion state)' : ' (a non-expansion state)'}.`,
+        legalBasis: '42 USC § 1396a; 42 CFR § 435.119',
+        whatWouldChange: `Your income would need to fall below ${medicaidIncomeThreshold}% FPL ($${Math.round((medicaidIncomeThreshold / 100) * (fplPct > 0 ? profile.annualIncome / (fplPct / 100) : 15060)).toLocaleString()}/yr) to qualify in ${profile.state}.${!inExpansionState ? ' Moving to a Medicaid expansion state raises the threshold to 138% FPL.' : ''}`,
+        profileData: `Income $${profile.annualIncome.toLocaleString()} = ${Math.round(fplPct)}% FPL → exceeds ${medicaidIncomeThreshold}% threshold`,
+      }, 'start', 'Medicaid check')
+    }
+  } else {
+    // Status does not qualify at all
+    ineligible.push('medicaid')
+    const statusReason = profile.immigrationStatus === 'undocumented'
+      ? 'Undocumented individuals are not eligible for federal Medicaid (Emergency Medicaid only for immediate life-threatening emergencies)'
+      : profile.immigrationStatus === 'daca'
+      ? `DACA recipients are not eligible for federal Medicaid. In ${profile.state}, state-funded Medicaid for DACA is ${DACA_MEDICAID_STATES.includes(profile.state) ? 'available' : 'not available'}.`
+      : `${formatStatus(profile.immigrationStatus)} visa holders are not eligible for federal Medicaid`
+    addNode({
       id: 'medicaid_result',
       label: 'Medicaid',
-      subtitle: 'Free or low-cost coverage',
+      subtitle: 'Not eligible — immigration status',
       type: 'result',
-      status: 'eligible',
-      explanation: 'You appear eligible for Medicaid. Apply through your state\'s Medicaid agency or Healthcare.gov. Coverage can start as soon as the month you apply.',
-    })
-    edges.push({ from: 'medicaid_check', to: 'medicaid_result', label: 'Eligible' })
-  } else {
-    ineligible.push('medicaid')
+      status: 'ineligible',
+      explanation: statusReason,
+      legalBasis: '8 USC § 1611; 8 USC § 1612; Social Security Act § 1903(v)',
+      whatWouldChange: 'Receiving a green card (and waiting 5 years in most states), gaining citizenship, or being granted refugee/asylee status would make you federally Medicaid-eligible.',
+      profileData: `Status: ${formatStatus(profile.immigrationStatus)} → not in federally-eligible category`,
+    }, 'start', 'Medicaid check')
   }
 
-  // --- Employer-sponsored ---
+  // ── Employer-sponsored ──
   if (profile.hasEmployerInsurance) {
     eligible.push('employer_sponsored')
-    nodes.push({
+    const employerMatch = matchEmployerPlans(profile.employerName)
+    const employerPlanIds = employerMatch
+      ? employerMatch.data.plans.map((_, idx) => `employer_plan_${idx}`)
+      : []
+    addNode({
       id: 'employer',
       label: 'Employer-sponsored plan',
-      subtitle: 'Through your job',
+      subtitle: profile.employerName ? `Through ${profile.employerName}` : 'Through your job',
       type: 'result',
       status: 'eligible',
-      explanation: 'You have access to employer-sponsored insurance. This is typically the most cost-effective option as employers usually cover 50-80% of premiums. Review the plan details during your enrollment window.',
-    })
-    edges.push({ from: 'start', to: 'employer' })
+      explanation: employerMatch
+        ? `You have access to employer-sponsored insurance through ${profile.employerName}. ${employerMatch.data.notes} ${employerMatch.data.enrollmentTip}`
+        : 'You have access to employer-sponsored insurance. Employers typically cover 50–80% of premiums, making this the most cost-effective option. Review plan details during your enrollment window.',
+      children: employerPlanIds,
+      profileData: `Employer: ${profile.employerName ?? 'unknown'} → insurance offered`,
+    }, 'start', 'Employed')
+
+    if (employerMatch) {
+      employerMatch.data.plans.forEach((planName, idx) => {
+        addNode({
+          id: `employer_plan_${idx}`,
+          label: planName,
+          subtitle: profile.employerName ?? employerMatch.key,
+          type: 'result',
+          status: 'eligible',
+          explanation: `${employerMatch.data.notes} Enrollment tip: ${employerMatch.data.enrollmentTip}`,
+          profileData: `Employer ${profile.employerName} → known plan offering`,
+        }, 'employer', 'Option')
+      })
+    }
   }
 
-  // --- School / ISP for students ---
-  if (['f1_student', 'j1_scholar', 'j2'].includes(profile.immigrationStatus) || profile.isStudent) {
+  // ── School / ISP — only for actual students or student visas ──
+  const isStudentContext = profile.isStudent ||
+    ['f1_student', 'f1_opt', 'j1_scholar', 'j2'].includes(profile.immigrationStatus)
+
+  if (isStudentContext) {
     eligible.push('school_plan')
     eligible.push('international_student_plan')
-    nodes.push({
+
+    addNode({
       id: 'school_plan',
-      label: 'University health plan',
-      subtitle: 'Often required for enrollment',
+      label: 'University health plan (SHIP)',
+      subtitle: profile.university ? `${profile.university} plan` : 'Often required for enrollment',
       type: 'result',
       status: 'eligible',
       explanation: 'Most universities offer a Student Health Insurance Plan (SHIP). Many schools require international students to enroll unless they can prove comparable coverage. Check if your school allows a waiver.',
-    })
-    nodes.push({
+      profileData: `Student status: ${profile.immigrationStatus}${profile.university ? ` at ${profile.university}` : ''}`,
+    }, 'start', 'Student')
+
+    addNode({
       id: 'isp',
-      label: 'International student plan',
-      subtitle: 'Private ISP as alternative',
+      label: 'International student plan (ISP)',
+      subtitle: 'Private plan, may satisfy waiver',
       type: 'result',
       status: 'eligible',
       explanation: 'International Student Plans (ISPs) are private health plans designed for international students. They often cost less than school plans and can satisfy waiver requirements. Compare carefully — networks and coverage levels vary.',
-    })
-    edges.push({ from: 'start', to: 'school_plan' })
-    edges.push({ from: 'start', to: 'isp' })
+      profileData: `Student visa / enrollment status → ISP eligible`,
+    }, 'start', 'Student alt.')
 
     if (profile.immigrationStatus === 'j1_scholar') {
       circumstances.push('J-1 federal mandate: you are legally required to carry health insurance meeting specific minimums (22 CFR 62.14). Verify any plan meets these requirements.')
     }
-
-    // Add context for students graduating soon
     if (profile.yearsLeftInCollege === 'less_than_1') {
-      circumstances.push('You\'re graduating soon — check your school plan\'s termination date and plan your transition to post-graduation coverage (employer plan, ACA marketplace, or COBRA) in advance.')
+      circumstances.push('You\'re graduating soon — check your school plan\'s termination date and plan your transition to post-graduation coverage in advance.')
     }
   }
 
-  // --- Short-term plans ---
-  const shortTermEligible = !['us_citizen', 'green_card', 'refugee_asylee'].includes(profile.immigrationStatus) ||
-    profile.hasEmployerInsurance === false
-  if (shortTermEligible) {
-    eligible.push('short_term')
-    nodes.push({
-      id: 'short_term',
-      label: 'Short-term health plan',
-      subtitle: 'Limited coverage — use with caution',
-      type: 'result',
-      status: 'pending',
-      explanation: 'Short-term plans are available to most people but have significant gaps: no coverage for pre-existing conditions, mental health, maternity, or preventive care. They should be a last resort. Duration is usually 1-3 months, renewable in some states.',
-    })
-    edges.push({ from: 'start', to: 'short_term' })
-    circumstances.push('Short-term plans are available but have serious coverage limitations. Review carefully before enrolling.')
-  }
-
-  // COBRA
+  // ── COBRA ──
   if (['unemployed_seeking', 'unemployed_not_seeking'].includes(profile.employmentStatus) && profile.currentlyInsured) {
     eligible.push('cobra')
     circumstances.push('You may be eligible for COBRA continuation coverage. You have 60 days from job loss to elect it. Cost is high — you pay the full premium — but coverage is identical to your prior plan.')
@@ -300,6 +337,35 @@ export function calculateEligibility(profile: UserProfile): EligibilityResult {
       description: 'Contact your former employer\'s HR department. You have exactly 60 days from your coverage end date to elect COBRA.',
       priority: 'high',
     })
+    addNode({
+      id: 'cobra_result',
+      label: 'COBRA continuation',
+      subtitle: 'Keep your prior employer plan',
+      type: 'result',
+      status: 'eligible',
+      explanation: 'COBRA lets you continue your prior employer\'s coverage after job loss — same plan, same network, same providers. You pay the full premium (no employer subsidy). Election window is 60 days from coverage end date.',
+      legalBasis: '29 USC § 1161-1168 (ERISA Title I, Part 6)',
+      whatWouldChange: 'COBRA is time-limited (18 months typically). Compare against ACA marketplace plans — job loss is a Special Enrollment Period trigger.',
+      profileData: `Employment: ${profile.employmentStatus} + previously insured → COBRA eligible`,
+    }, 'start', 'Job loss')
+  }
+
+  // ── Short-term plans ──
+  const shortTermEligible = !['us_citizen', 'green_card', 'refugee_asylee'].includes(profile.immigrationStatus) ||
+    !profile.hasEmployerInsurance
+  if (shortTermEligible) {
+    eligible.push('short_term')
+    addNode({
+      id: 'short_term',
+      label: 'Short-term health plan',
+      subtitle: 'Limited coverage — last resort',
+      type: 'result',
+      status: 'pending',
+      explanation: 'Short-term plans are available to most people but have significant gaps: no coverage for pre-existing conditions, mental health, maternity, or preventive care. They should be a last resort. Duration is usually 1–3 months.',
+      whatWouldChange: 'Qualifying for a more comprehensive option (employer plan, ACA marketplace, Medicaid) is always preferable. Short-term plans should only be used to bridge temporary gaps.',
+      profileData: `No primary comprehensive coverage available → short-term as fallback`,
+    }, 'start', 'Fallback')
+    circumstances.push('Short-term plans are available but have serious coverage limitations. Review carefully before enrolling.')
   }
 
   // Determine primary recommendation
@@ -384,6 +450,40 @@ export function calculateEligibility(profile: UserProfile): EligibilityResult {
   }
 
   const bestOptionReasoning = buildBestOptionReasoning(adjustedPrimary, profile, fplPct, eligible)
+
+  // ── Mark primary path nodes ──
+  const primaryResultNodeId = adjustedPrimary === 'employer_sponsored' ? 'employer'
+    : adjustedPrimary === 'medicaid' ? 'medicaid_result'
+    : adjustedPrimary === 'aca_marketplace' ? 'aca_result'
+    : adjustedPrimary === 'school_plan' ? 'school_plan'
+    : adjustedPrimary === 'international_student_plan' ? 'isp'
+    : adjustedPrimary === 'cobra' ? 'cobra_result'
+    : 'short_term'
+
+  // Walk from primary result back to start via edges and mark all as primaryPath
+  const primaryPathIds = new Set<string>(['start', primaryResultNodeId])
+  // Subsidy is on the primary path when ACA is primary
+  if (adjustedPrimary === 'aca_marketplace') {
+    const subsidyNode = nodes.find(n => n.id === 'subsidy')
+    if (subsidyNode) primaryPathIds.add('subsidy')
+  }
+  nodes.forEach(n => {
+    if (primaryPathIds.has(n.id)) n.primaryPath = true
+  })
+
+  // ── Network checker node if user has preferred providers ──
+  if (profile.preferredDoctors) {
+    addNode({
+      id: 'network_check',
+      label: 'Provider network check',
+      subtitle: profile.preferredDoctors,
+      type: 'action',
+      status: 'pending',
+      primaryPath: true,
+      explanation: `You indicated you want to keep ${profile.preferredDoctors}. Network availability varies by plan — HMO plans restrict you to their network, PPO plans give more flexibility. Use the Network Checker tab to verify before enrolling.`,
+      profileData: `Preferred providers: ${profile.preferredDoctors}`,
+    }, primaryResultNodeId, 'Next step')
+  }
 
   return {
     eligiblePlans: eligible,

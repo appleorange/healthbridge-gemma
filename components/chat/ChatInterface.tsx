@@ -6,6 +6,8 @@ import type { UserProfile, ChatMessage } from '@/types'
 interface Props {
   userProfile: UserProfile
   initialContext?: string
+  autoSendPrompt?: string
+  onAutoPromptSent?: () => void
 }
 
 const SUGGESTED_QUESTIONS = [
@@ -27,7 +29,7 @@ function makeWelcome(userProfile: UserProfile): ChatMessage {
   }
 }
 
-export default function ChatInterface({ userProfile }: Props) {
+export default function ChatInterface({ userProfile, autoSendPrompt, onAutoPromptSent }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     if (typeof window === 'undefined') return [makeWelcome(userProfile)]
     try {
@@ -60,6 +62,16 @@ export default function ChatInterface({ userProfile }: Props) {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  const autoSentRef = useRef(false)
+  useEffect(() => {
+    if (autoSendPrompt && !autoSentRef.current) {
+      autoSentRef.current = true
+      sendMessage(autoSendPrompt)
+      onAutoPromptSent?.()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSendPrompt])
 
   function clearHistory() {
     const welcome = makeWelcome(userProfile)

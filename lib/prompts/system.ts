@@ -202,6 +202,8 @@ The user's immigration status doesn't fit standard categories. Approach with cau
 `,
 }
 
+import { matchEmployerPlans } from '@/lib/plans/plan-finder'
+
 export function buildSystemPrompt(immigrationStatus: string, userProfile?: Record<string, unknown>): string {
   const statusPrompt = STATUS_PROMPTS[immigrationStatus] || STATUS_PROMPTS['other']
 
@@ -212,6 +214,7 @@ export function buildSystemPrompt(immigrationStatus: string, userProfile?: Recor
 - Age: ${userProfile.age}
 - Employment: ${userProfile.employmentStatus}${userProfile.employerName ? ` at ${userProfile.employerName}` : ''}
 - Employer insurance offered: ${userProfile.hasEmployerInsurance ?? 'unknown'}
+- Current employer plan: ${userProfile.currentEmployerPlan ?? 'not specified'}
 - School: ${userProfile.isStudent ? (userProfile.university ?? 'enrolled student') : 'not a student'}
 - Annual income: $${userProfile.annualIncome?.toLocaleString() ?? 'unknown'}
 - Household size: ${userProfile.householdSize}
@@ -221,7 +224,8 @@ export function buildSystemPrompt(immigrationStatus: string, userProfile?: Recor
 - Chronic conditions: ${userProfile.hasChronicConditions ? (userProfile.chronicConditionList ?? 'yes, unspecified') : 'None reported'}
 - Hospital visit frequency: ${userProfile.hospitalVisitFrequency ?? 'not specified'}
 - Planned procedures: ${userProfile.expectsSurgeryOrProcedure ? 'Yes' : 'None planned'}
-- Preferred doctors/hospitals: ${userProfile.preferredDoctors ?? 'None specified'}
+- Preferred doctors/hospitals: ${userProfile.preferredDoctors ?? 'None specified'}${userProfile.preferredDoctors ? `
+  IMPORTANT: The user wants to keep these providers: ${userProfile.preferredDoctors}. When recommending plans, always flag whether HMO plans may restrict access to these providers and recommend the user verify network status before enrolling. PPO plans give more flexibility for keeping existing providers.` : ''}
 - Benefit priorities: ${Array.isArray(userProfile.benefitPriorities) && userProfile.benefitPriorities.length > 0
     ? (userProfile.benefitPriorities as string[]).join(', ')
     : 'None specified'}
@@ -229,6 +233,17 @@ export function buildSystemPrompt(immigrationStatus: string, userProfile?: Recor
     ? (userProfile.specificHealthConcerns as string[]).join(', ')
     : 'None specified'}
 - Monthly premium budget: ${userProfile.monthlyPremiumBudget ?? 'not specified'}
+${(() => {
+  const match = matchEmployerPlans(userProfile.employerName as string | undefined)
+  if (!match) return ''
+  return `
+## Employer-specific plan context
+The user works at ${userProfile.employerName}. This employer offers the following specific plans:
+${match.data.plans.map(p => `- ${p}`).join('\n')}
+Notes: ${match.data.notes}
+Enrollment tip: ${match.data.enrollmentTip}
+When discussing coverage options, reference these plans by name and use the notes above to give accurate, specific guidance.`
+})()}
 
 Always use this profile as full context. Never ask for information already provided here.
 When discussing plans, tailor recommendations to their benefit priorities (${

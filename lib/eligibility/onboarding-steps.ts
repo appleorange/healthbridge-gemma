@@ -174,6 +174,15 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
           { value: 'unknown', label: "I'm not sure" },
         ],
       },
+      {
+        id: 'currentEmployerPlan',
+        label: 'Which plan are you currently on?',
+        type: 'text',
+        placeholder: 'e.g. Anthem PPO, Kaiser HMO Gold, Aetna HDHP',
+        required: false,
+        showWhen: { field: 'hasEmployerInsurance', value: true },
+        helpText: 'Check your insurance card or HR portal. This helps us compare your current plan against your other options at open enrollment.',
+      },
 
       // ── Self-employed ──
       {

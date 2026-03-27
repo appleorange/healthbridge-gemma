@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Shield, GitBranch, MessageCircle, CheckCircle, AlertCircle, Clock,
-  ChevronRight, RotateCcw, Calendar, FileText, DollarSign, MapPin, Sparkles,
+  ChevronRight, RotateCcw, Calendar, FileText, DollarSign, MapPin, Sparkles, Stethoscope,
 } from 'lucide-react'
 import EligibilityFlowchart from '@/components/flowchart/EligibilityFlowchart'
 import ChatInterface from '@/components/chat/ChatInterface'
@@ -11,7 +11,8 @@ import EnrollmentTimeline from '@/components/timeline/EnrollmentTimeline'
 import DocumentHub from '@/components/documents/DocumentHub'
 import CostEstimator from '@/components/calculators/CostEstimator'
 import PlanCards from '@/components/plans/PlanCards'
-import type { UserProfile, EligibilityResult, PlanType, PlanCard } from '@/types'
+import NetworkChecker from '@/components/network/NetworkChecker'
+import type { UserProfile, EligibilityResult, PlanType, PlanCard, ParsedDocument } from '@/types'
 
 const PLAN_INFO: Record<PlanType, { label: string; color: string; description: string; detail: string }> = {
   medicaid: {
@@ -90,7 +91,7 @@ const COLOR_MAP: Record<string, string> = {
   red:    'bg-red-50 border-red-200 text-red-800',
 }
 
-type Tab = 'overview' | 'plans' | 'costs' | 'flowchart' | 'chat' | 'timeline' | 'documents'
+type Tab = 'overview' | 'plans' | 'costs' | 'flowchart' | 'chat' | 'timeline' | 'documents' | 'network'
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -101,6 +102,11 @@ export default function DashboardPage() {
   const [planCards, setPlanCards] = useState<PlanCard[]>([])
   const [plansLoading, setPlansLoading] = useState(false)
   const [plansFetched, setPlansFetched] = useState(false)
+  const [chatAutoPrompt, setChatAutoPrompt] = useState<string | undefined>(undefined)
+  const [documents, setDocuments] = useState<ParsedDocument[]>(() => {
+    if (typeof window === 'undefined') return []
+    try { return JSON.parse(sessionStorage.getItem('hb_documents') ?? '[]') } catch { return [] }
+  })
 
   useEffect(() => {
     const p = sessionStorage.getItem('hb_profile')
@@ -109,6 +115,10 @@ export default function DashboardPage() {
     setProfile(JSON.parse(p))
     setEligibility(JSON.parse(e))
   }, [router])
+
+  useEffect(() => {
+    sessionStorage.setItem('hb_documents', JSON.stringify(documents))
+  }, [documents])
 
   if (!profile || !eligibility) {
     return (
@@ -121,23 +131,28 @@ export default function DashboardPage() {
   const primary = PLAN_INFO[eligibility.primaryRecommendation]
 
   const TABS = [
-    { id: 'overview',  icon: CheckCircle,  label: 'Overview' },
-    { id: 'plans',     icon: MapPin,       label: 'Plans near me' },
-    { id: 'costs',     icon: DollarSign,   label: 'Cost estimate' },
-    { id: 'flowchart', icon: GitBranch,    label: 'Why this route' },
-    { id: 'chat',      icon: MessageCircle,label: 'Ask AI' },
-    { id: 'timeline',  icon: Calendar,     label: 'Timeline' },
-    { id: 'documents', icon: FileText,     label: 'Documents' },
+    { id: 'overview',  icon: CheckCircle,   label: 'Overview' },
+    { id: 'plans',     icon: MapPin,        label: 'Plans near me' },
+    { id: 'costs',     icon: DollarSign,    label: 'Cost estimate' },
+    { id: 'network',   icon: Stethoscope,   label: 'Network checker' },
+    { id: 'flowchart', icon: GitBranch,     label: 'Why this route' },
+    { id: 'chat',      icon: MessageCircle, label: 'Ask AI' },
+    { id: 'timeline',  icon: Calendar,      label: 'Timeline' },
+    { id: 'documents', icon: FileText,      label: 'Documents' },
   ] as const
 
   async function fetchPlans() {
-    if (plansFetched || !profile) return
+    if (plansFetched || !profile || !eligibility) return
     setPlansLoading(true)
     try {
       const res = await fetch('/api/plans', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ profile }),
+        body: JSON.stringify({
+          profile,
+          eligiblePlans: eligibility.eligiblePlans,
+          primaryRecommendation: eligibility.primaryRecommendation,
+        }),
       })
       const data = await res.json()
       setPlanCards(data.plans ?? [])
@@ -195,7 +210,7 @@ export default function DashboardPage() {
           {TABS.map(t => (
             <button
               key={t.id}
-              onClick={() => { setTab(t.id as Tab); if (t.id === 'plans') fetchPlans() }}
+              onClick={() => { setTab(t.id as Tab); if (t.id === 'plans' || t.id === 'network') fetchPlans() }}
               className={`flex items-center gap-1.5 px-4 py-3.5 text-sm font-medium border-b-2 transition-all whitespace-nowrap ${
                 tab === t.id
                   ? 'border-brand-500 text-brand-700'
@@ -343,6 +358,45 @@ export default function DashboardPage() {
               </section>
             )}
 
+            {/* From your documents */}
+            {documents.length > 0 && (() => {
+              const allDeadlines = documents.flatMap(d => d.deadlines.map(dl => ({ ...dl, fileName: d.fileName })))
+              const allFlagged = documents.flatMap(d => d.extractedFields.filter(f => f.flagged).map(f => ({ ...f, fileName: d.fileName })))
+              if (allDeadlines.length === 0 && allFlagged.length === 0) return null
+              return (
+                <section>
+                  <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                    From your documents ({documents.length})
+                  </h3>
+                  <div className="space-y-2">
+                    {allDeadlines.map((dl, i) => (
+                      <div key={i} className={`flex items-center justify-between p-3 rounded-xl border ${dl.urgent ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-100'}`}>
+                        <div className="flex items-start gap-2 min-w-0">
+                          <AlertCircle className={`w-4 h-4 flex-shrink-0 mt-0.5 ${dl.urgent ? 'text-red-500' : 'text-amber-500'}`} />
+                          <div className="min-w-0">
+                            <p className={`text-sm font-medium ${dl.urgent ? 'text-red-800' : 'text-amber-800'}`}>{dl.label}</p>
+                            <p className="text-xs text-gray-400 truncate">{dl.fileName}</p>
+                          </div>
+                        </div>
+                        <span className={`text-xs font-bold whitespace-nowrap ml-2 ${dl.urgent ? 'text-red-600' : 'text-amber-600'}`}>{dl.date}</span>
+                      </div>
+                    ))}
+                    {allFlagged.map((f, i) => (
+                      <div key={i} className="flex items-start justify-between gap-3 p-3 bg-white border border-amber-200 rounded-xl">
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-amber-700 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3 flex-shrink-0" /> {f.label}
+                          </p>
+                          <p className="text-xs text-gray-400 truncate">{f.fileName}</p>
+                        </div>
+                        <span className="text-xs font-medium text-gray-700 text-right whitespace-nowrap">{f.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )
+            })()}
+
             {/* CTA row */}
             <div className="grid grid-cols-2 gap-3">
               <div
@@ -372,23 +426,50 @@ export default function DashboardPage() {
         {/* PLANS NEAR ME TAB */}
         {tab === 'plans' && (
           <div className="max-w-2xl mx-auto px-6 py-8 w-full">
-            <div className="flex items-start justify-between mb-2">
-              <div>
-                <h3 className="text-base font-semibold text-gray-900">Plans in your area</h3>
-                <p className="text-sm text-gray-500 mt-0.5">
-                  {profile.zipCode
-                    ? `Showing plans available near ZIP ${profile.zipCode}`
-                    : 'Add your ZIP code in settings to see real plans in your area'}
-                </p>
+            <h3 className="text-base font-semibold text-gray-900 mb-4">Plans in your area</h3>
+
+            {/* Always-visible eligibility banner */}
+            <div className="mb-3 p-3 bg-brand-50 border border-brand-200 rounded-xl text-sm text-brand-800 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <Sparkles className="w-4 h-4 text-brand-500 flex-shrink-0" />
+                <span>
+                  Showing plans based on your eligibility. The AI recommends{' '}
+                  <strong>{primary.label}</strong> for your profile.
+                </span>
               </div>
+              <button
+                onClick={() => setTab('flowchart')}
+                className="text-brand-600 hover:text-brand-800 text-xs font-semibold whitespace-nowrap flex items-center gap-0.5"
+              >
+                See why <ChevronRight className="w-3.5 h-3.5" />
+              </button>
             </div>
+
+            {/* Secondary context banners */}
             {!profile.zipCode && (
-              <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700 flex items-center gap-2">
+              <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700 flex items-center gap-2">
                 <MapPin className="w-4 h-4 flex-shrink-0" />
                 No ZIP code on file — showing estimated plans. Go back to onboarding to add your ZIP for real results.
               </div>
             )}
-            <PlanCards plans={planCards} loading={plansLoading} />
+            {profile.currentlyInsured && (() => {
+              const currentCard = planCards.find(p => p.isCurrentPlan)
+              if (!currentCard) return null
+              const isOnPrimary = currentCard.isPrimaryRecommendation
+              return isOnPrimary ? (
+                <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-xl text-sm text-green-800 flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
+                  Your current {primary.label.toLowerCase()} looks like your best option — here&apos;s why, and what to watch for at renewal.
+                </div>
+              ) : (
+                <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                  You may have a better option available — the AI recommends switching to <strong>{primary.label}</strong>.
+                </div>
+              )
+            })()}
+
+            <PlanCards plans={planCards} loading={plansLoading} estimates={eligibility.costEstimates ?? []} />
           </div>
         )}
 
@@ -405,7 +486,13 @@ export default function DashboardPage() {
                 Costs are estimated ranges based on your health profile. The AI recommendation accounts for both cost and coverage quality.
               </p>
             </div>
-            <CostEstimator profile={profile} eligiblePlans={eligibility.eligiblePlans} primaryRecommendation={eligibility.primaryRecommendation} />
+            <CostEstimator
+              profile={profile}
+              eligiblePlans={eligibility.eligiblePlans}
+              primaryRecommendation={eligibility.primaryRecommendation}
+              onSeeFullPlans={() => setTab('plans')}
+              documentPlans={documents.filter(d => d.planDetails && Object.values(d.planDetails).some(v => v))}
+            />
           </div>
         )}
 
@@ -420,13 +507,42 @@ export default function DashboardPage() {
               edges={eligibility.flowchartEdges}
               profile={profile}
             />
+
+          </div>
+        )}
+
+        {/* NETWORK CHECKER TAB */}
+        {tab === 'network' && (
+          <div className="max-w-2xl mx-auto px-6 py-8 w-full">
+            <h3 className="text-base font-semibold text-gray-900 mb-1">Network Checker</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              Check if your doctors and hospitals are covered under your eligible plans before you enroll.
+            </p>
+            {profile.preferredDoctors && (
+              <button
+                onClick={() => {
+                  const prompt = `Based on my profile and preferred doctors (${profile.preferredDoctors}), which of my eligible plans is most likely to keep my current providers in-network and why?`
+                  setChatAutoPrompt(prompt)
+                  setTab('chat')
+                }}
+                className="mb-6 w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-brand-50 border border-brand-200 text-brand-700 text-sm font-medium hover:bg-brand-100 transition-all"
+              >
+                <MessageCircle className="w-4 h-4" />
+                Ask AI about my providers
+              </button>
+            )}
+            <NetworkChecker
+              profile={profile}
+              eligiblePlans={eligibility.eligiblePlans}
+              planCards={planCards}
+            />
           </div>
         )}
 
         {/* CHAT TAB */}
         {tab === 'chat' && (
           <div className="flex-1 flex flex-col" style={{ height: 'calc(100vh - 200px)' }}>
-            <ChatInterface userProfile={profile} />
+            <ChatInterface userProfile={profile} autoSendPrompt={chatAutoPrompt} onAutoPromptSent={() => setChatAutoPrompt(undefined)} />
           </div>
         )}
 
@@ -434,7 +550,11 @@ export default function DashboardPage() {
         {tab === 'timeline' && (
           <div className="max-w-2xl mx-auto px-6 py-8 w-full">
             <h3 className="text-base font-semibold text-gray-900 mb-1">Enrollment Calendar</h3>
-            <EnrollmentTimeline profile={profile} />
+            <EnrollmentTimeline
+              profile={profile}
+              eligibilityResult={eligibility}
+              docDeadlines={documents.flatMap(d => d.deadlines.map(dl => ({ ...dl, fileName: d.fileName })))}
+            />
           </div>
         )}
 
@@ -442,7 +562,11 @@ export default function DashboardPage() {
         {tab === 'documents' && (
           <div className="max-w-2xl mx-auto px-6 py-8 w-full">
             <h3 className="text-base font-semibold text-gray-900 mb-1">Documents & Plan Comparison</h3>
-            <DocumentHub userProfile={profile} />
+            <DocumentHub
+              userProfile={profile}
+              documents={documents}
+              onDocumentsChange={setDocuments}
+            />
           </div>
         )}
       </div>

@@ -1,11 +1,12 @@
 'use client'
 import { useState } from 'react'
 import { ExternalLink, Star, Bookmark, GitCompare, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, Pill, Stethoscope } from 'lucide-react'
-import type { PlanCard } from '@/types'
+import type { PlanCard, CostEstimate } from '@/types'
 
 interface Props {
   plans: PlanCard[]
   loading: boolean
+  estimates?: CostEstimate[]
 }
 
 const NETWORK_COLORS: Record<string, string> = {
@@ -66,29 +67,47 @@ function StarRating({ rating }: { rating?: number }) {
   )
 }
 
-function PlanCardItem({ plan, isBest }: { plan: PlanCard; isBest: boolean }) {
+function PlanCardItem({ plan, isBest, annualTotal }: { plan: PlanCard; isBest: boolean; annualTotal?: { low: number; high: number } }) {
   const [expanded, setExpanded] = useState(false)
   const [saved, setSaved] = useState(false)
 
+  const isCurrent = plan.isCurrentPlan === true
+  const isOnRecommendedType = isCurrent && plan.isPrimaryRecommendation
+  const isConsiderSwitching = isCurrent && !plan.isPrimaryRecommendation
   const premium = plan.subsidizedPremium ?? plan.monthlyPremium
   const subsidized = plan.subsidizedPremium !== undefined && plan.subsidizedPremium < plan.monthlyPremium
 
   return (
     <div className={`rounded-2xl border overflow-hidden transition-all ${
-      isBest ? 'border-brand-300 shadow-sm' : 'border-gray-100 bg-white'
+      isConsiderSwitching ? 'border-amber-300 shadow-sm'
+      : isOnRecommendedType ? 'border-green-400 shadow-sm'
+      : isBest ? 'border-brand-300 shadow-sm'
+      : 'border-gray-100 bg-white'
     }`}>
-      {/* Best match badge */}
-      {isBest && (
+      {/* Header badge */}
+      {isConsiderSwitching && (
+        <div className="bg-amber-500 text-white text-xs font-semibold px-4 py-1.5 flex items-center gap-1.5">
+          <AlertTriangle className="w-3.5 h-3.5" />
+          Your current plan — consider switching to the recommended plan type
+        </div>
+      )}
+      {isOnRecommendedType && (
+        <div className="bg-green-600 text-white text-xs font-semibold px-4 py-1.5 flex items-center gap-1.5">
+          <CheckCircle className="w-3.5 h-3.5" />
+          Your current plan — this remains your best option
+        </div>
+      )}
+      {!isCurrent && isBest && (
         <div className="bg-brand-600 text-white text-xs font-semibold px-4 py-1.5 flex items-center gap-1.5">
           <CheckCircle className="w-3.5 h-3.5" /> Your best plan match
         </div>
       )}
 
-      <div className={`p-4 ${isBest ? 'bg-brand-50' : 'bg-white'}`}>
+      <div className={`p-4 ${isConsiderSwitching ? 'bg-amber-50' : isOnRecommendedType ? 'bg-green-50' : isBest ? 'bg-brand-50' : 'bg-white'}`}>
         {/* Header row */}
         <div className="flex items-start gap-3 mb-3">
           <div className="flex-1 min-w-0">
-            <p className={`text-sm font-semibold leading-tight ${isBest ? 'text-brand-900' : 'text-gray-900'}`}>
+            <p className={`text-sm font-semibold leading-tight ${isBest && !isCurrent ? 'text-brand-900' : 'text-gray-900'}`}>
               {plan.name}
             </p>
             <p className="text-xs text-gray-400 mt-0.5">{plan.issuer}</p>
@@ -114,8 +133,8 @@ function PlanCardItem({ plan, isBest }: { plan: PlanCard; isBest: boolean }) {
         </div>
 
         {/* Premium highlight */}
-        <div className={`rounded-xl p-3 mb-3 text-center ${isBest ? 'bg-brand-100' : 'bg-gray-50'}`}>
-          <p className={`text-2xl font-bold ${isBest ? 'text-brand-800' : 'text-gray-800'}`}>
+        <div className={`rounded-xl p-3 mb-3 text-center ${isCurrent ? 'bg-gray-100' : isBest ? 'bg-brand-100' : 'bg-gray-50'}`}>
+          <p className={`text-2xl font-bold ${isBest && !isCurrent ? 'text-brand-800' : 'text-gray-800'}`}>
             ${premium}<span className="text-sm font-normal">/mo</span>
           </p>
           {subsidized && (
@@ -123,35 +142,40 @@ function PlanCardItem({ plan, isBest }: { plan: PlanCard; isBest: boolean }) {
               After subsidy (was ${plan.monthlyPremium}/mo)
             </p>
           )}
-          <p className={`text-xs mt-0.5 ${isBest ? 'text-brand-600' : 'text-gray-400'}`}>Monthly Premium</p>
+          <p className={`text-xs mt-0.5 ${isBest && !isCurrent ? 'text-brand-600' : 'text-gray-400'}`}>Monthly Premium</p>
+          {annualTotal && (
+            <p className="text-xs text-gray-400 mt-0.5">
+              Est. ${annualTotal.low.toLocaleString()}–${annualTotal.high.toLocaleString()}/year total
+            </p>
+          )}
         </div>
 
         {/* Copay row */}
         <div className="grid grid-cols-2 gap-2 mb-3">
-          <div className={`rounded-xl p-2.5 text-center ${isBest ? 'bg-brand-100' : 'bg-gray-50'}`}>
+          <div className={`rounded-xl p-2.5 text-center ${isCurrent ? 'bg-gray-100' : isBest ? 'bg-brand-100' : 'bg-gray-50'}`}>
             <p className={`text-base font-semibold ${isBest ? 'text-brand-800' : 'text-gray-700'}`}>
               {plan.pcpCopay !== null ? `$${plan.pcpCopay}` : 'See plan'}
             </p>
-            <p className={`text-xs mt-0.5 ${isBest ? 'text-brand-600' : 'text-gray-400'}`}>PCP Copay</p>
+            <p className={`text-xs mt-0.5 ${isBest && !isCurrent ? 'text-brand-600' : 'text-gray-400'}`}>PCP Copay</p>
           </div>
-          <div className={`rounded-xl p-2.5 text-center ${isBest ? 'bg-brand-100' : 'bg-gray-50'}`}>
+          <div className={`rounded-xl p-2.5 text-center ${isCurrent ? 'bg-gray-100' : isBest ? 'bg-brand-100' : 'bg-gray-50'}`}>
             <p className={`text-base font-semibold ${isBest ? 'text-brand-800' : 'text-gray-700'}`}>
               {plan.specialistCopay !== null ? `$${plan.specialistCopay}` : 'See plan'}
             </p>
-            <p className={`text-xs mt-0.5 ${isBest ? 'text-brand-600' : 'text-gray-400'}`}>Specialist Copay</p>
+            <p className={`text-xs mt-0.5 ${isBest && !isCurrent ? 'text-brand-600' : 'text-gray-400'}`}>Specialist Copay</p>
           </div>
         </div>
 
         {/* Add drugs / add doctors prompts */}
         <div className="grid grid-cols-2 gap-2 mb-3">
           <button className={`flex flex-col items-center gap-1 p-2.5 rounded-xl border text-xs font-medium transition-all ${
-            isBest ? 'border-brand-200 bg-brand-50 text-brand-700 hover:bg-brand-100' : 'border-gray-100 text-gray-500 hover:bg-gray-50'
+            isBest && !isCurrent ? 'border-brand-200 bg-brand-50 text-brand-700 hover:bg-brand-100' : 'border-gray-100 text-gray-500 hover:bg-gray-50'
           }`}>
             <Pill className="w-4 h-4" />
             <span className="text-center leading-tight">Add your drugs<br/>to see costs</span>
           </button>
           <button className={`flex flex-col items-center gap-1 p-2.5 rounded-xl border text-xs font-medium transition-all ${
-            isBest ? 'border-brand-200 bg-brand-50 text-brand-700 hover:bg-brand-100' : 'border-gray-100 text-gray-500 hover:bg-gray-50'
+            isBest && !isCurrent ? 'border-brand-200 bg-brand-50 text-brand-700 hover:bg-brand-100' : 'border-gray-100 text-gray-500 hover:bg-gray-50'
           }`}>
             <Stethoscope className="w-4 h-4" />
             <span className="text-center leading-tight">Add your doctors<br/>to see coverage</span>
@@ -177,14 +201,14 @@ function PlanCardItem({ plan, isBest }: { plan: PlanCard; isBest: boolean }) {
 
         {/* Why this plan fits you */}
         {plan.fitReasons.length > 0 && (
-          <div className={`rounded-xl p-3 mb-3 ${isBest ? 'bg-brand-100' : 'bg-gray-50'}`}>
-            <p className={`text-xs font-semibold mb-2 ${isBest ? 'text-brand-700' : 'text-gray-500'}`}>
+          <div className={`rounded-xl p-3 mb-3 ${isCurrent ? 'bg-gray-100' : isBest ? 'bg-brand-100' : 'bg-gray-50'}`}>
+            <p className={`text-xs font-semibold mb-2 ${isBest && !isCurrent ? 'text-brand-700' : 'text-gray-500'}`}>
               Why this plan fits you
             </p>
             <div className="flex flex-wrap gap-1.5">
               {plan.fitReasons.map((r, i) => (
                 <span key={i} className={`text-xs px-2.5 py-1 rounded-full font-medium flex items-center gap-1 ${
-                  isBest ? 'bg-brand-500 text-white' : 'bg-blue-50 text-blue-700 border border-blue-200'
+                  isBest && !isCurrent ? 'bg-brand-500 text-white' : 'bg-blue-50 text-blue-700 border border-blue-200'
                 }`}>
                   <CheckCircle className="w-3 h-3 flex-shrink-0" />
                   {r}
@@ -208,14 +232,14 @@ function PlanCardItem({ plan, isBest }: { plan: PlanCard; isBest: boolean }) {
         <button
           onClick={() => setExpanded(e => !e)}
           className={`w-full flex items-center justify-center gap-1 text-xs font-medium py-2 rounded-xl transition-all ${
-            isBest ? 'text-brand-700 hover:bg-brand-100' : 'text-gray-400 hover:bg-gray-50'
+            isBest && !isCurrent ? 'text-brand-700 hover:bg-brand-100' : 'text-gray-400 hover:bg-gray-50'
           }`}
         >
           {expanded ? <><ChevronUp className="w-3.5 h-3.5" /> Hide details</> : <><ChevronDown className="w-3.5 h-3.5" /> See plan details</>}
         </button>
 
         {expanded && (
-          <div className={`mt-3 pt-3 border-t space-y-2 ${isBest ? 'border-brand-200' : 'border-gray-100'}`}>
+          <div className={`mt-3 pt-3 border-t space-y-2 ${isBest && !isCurrent ? 'border-brand-200' : 'border-gray-100'}`}>
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div>
                 <span className="text-gray-400">Deductible</span>
@@ -267,7 +291,7 @@ function PlanCardItem({ plan, isBest }: { plan: PlanCard; isBest: boolean }) {
   )
 }
 
-export default function PlanCards({ plans, loading }: Props) {
+export default function PlanCards({ plans, loading, estimates = [] }: Props) {
   if (loading) {
     return (
       <div className="space-y-4">
@@ -297,9 +321,17 @@ export default function PlanCards({ plans, loading }: Props) {
 
   return (
     <div className="space-y-4">
-      {plans.map((plan, i) => (
-        <PlanCardItem key={plan.id} plan={plan} isBest={i === 0} />
-      ))}
+      {plans.map(plan => {
+        const est = estimates.find(e => e.planType === plan.planType)
+        return (
+          <PlanCardItem
+            key={plan.id}
+            plan={plan}
+            isBest={plan.isPrimaryRecommendation === true}
+            annualTotal={est?.estimatedAnnualTotal}
+          />
+        )
+      })}
     </div>
   )
 }

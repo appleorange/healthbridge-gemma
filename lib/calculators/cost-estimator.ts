@@ -1,19 +1,32 @@
-import type { UserProfile, PlanType, CostEstimate, SubsidyCalculation } from '@/types'
+import type { UserProfile, PlanType, CostEstimate } from '@/types'
+import { matchEmployerPlans, KNOWN_EMPLOYER_PLANS } from '@/lib/plans/plan-finder'
 
-// 2024 Federal Poverty Level thresholds
+// 2026 Federal Poverty Level thresholds
 const FPL_BASE: Record<number, number> = {
-  1: 15060, 2: 20440, 3: 25820, 4: 31200,
-  5: 36580, 6: 41960, 7: 47340, 8: 52720,
+  1: 15650, 2: 21150, 3: 26650, 4: 32150,
+  5: 37650, 6: 43150, 7: 48650, 8: 54150,
 }
 
 export function getFPL(income: number, householdSize: number): number {
-  const base = FPL_BASE[Math.min(householdSize, 8)] ?? 52720 + (householdSize - 8) * 5380
+  const base = FPL_BASE[Math.min(householdSize, 8)] ?? 54150 + (householdSize - 8) * 5500
   return (income / base) * 100
+}
+
+// Local type for subsidy calculation result
+interface SubsidyResult {
+  fplPercentage: number
+  qualifiesForPTC: boolean
+  estimatedMonthlyCredit: { low: number; high: number }
+  qualifiesForCSR: boolean
+  csrLevel?: 'silver_94' | 'silver_87' | 'silver_73'
+  medicaidEligible: boolean
+  chipEligible: boolean
+  notes: string[]
 }
 
 // ── Subsidy / ACA eligibility calculator ────────────────────────────────────
 
-export function calculateSubsidy(profile: UserProfile): SubsidyCalculation {
+export function calculateSubsidy(profile: UserProfile): SubsidyResult {
   const fpl = getFPL(profile.annualIncome, profile.householdSize)
   const notes: string[] = []
 
@@ -22,7 +35,6 @@ export function calculateSubsidy(profile: UserProfile): SubsidyCalculation {
   const hasAffordableEmployerPlan = profile.hasEmployerInsurance &&
     ['employed_fulltime', 'employed_parttime'].includes(profile.employmentStatus)
 
-  // Medicaid check (roughly <138% FPL in expansion states)
   const MEDICAID_EXPANSION_STATES = [
     'AK','AZ','AR','CA','CO','CT','DC','DE','HI','ID','IL','IN','IA',
     'KS','KY','LA','ME','MD','MA','MI','MN','MO','MT','NE','NV','NH',
@@ -36,34 +48,26 @@ export function calculateSubsidy(profile: UserProfile): SubsidyCalculation {
     notes.push('At your income level you likely qualify for Medicaid — which has $0 premium and minimal cost-sharing. Apply before exploring marketplace plans.')
   }
 
-  // CHIP check
   const chipEligible = profile.hasDependents && fpl < 200 && isACAEligible
   if (chipEligible) notes.push("Your children may qualify for CHIP — low-cost coverage for kids in families that earn too much for Medicaid.")
 
-  // PTC (Premium Tax Credit) eligibility: 100–400% FPL, no affordable employer coverage
   const qualifiesForPTC = isACAEligible && fpl >= 100 && fpl <= 400 && !hasAffordableEmployerPlan && !medicaidEligible
 
-  // Estimate monthly PTC credit using benchmark methodology
-  // Required contribution % by FPL band (2024 tables, simplified)
   let requiredContributionPct = 0
-  if (fpl < 133) requiredContributionPct = 0
-  else if (fpl < 150) requiredContributionPct = 0
+  if (fpl < 150) requiredContributionPct = 0
   else if (fpl < 200) requiredContributionPct = 3.0
   else if (fpl < 250) requiredContributionPct = 4.0
   else if (fpl < 300) requiredContributionPct = 6.0
-  else if (fpl < 400) requiredContributionPct = 8.5
   else requiredContributionPct = 8.5
 
-  // Benchmark Silver plan national average premium (2024 single): ~$450–$600/month
   const benchmarkPremiumLow = 450
   const benchmarkPremiumHigh = 600
   const requiredContributionMonthly = (profile.annualIncome * requiredContributionPct / 100) / 12
   const creditLow = Math.max(0, Math.round(benchmarkPremiumLow - requiredContributionMonthly))
   const creditHigh = Math.max(0, Math.round(benchmarkPremiumHigh - requiredContributionMonthly))
 
-  // CSR (Cost-Sharing Reduction) — available at 100–250% FPL on Silver plans
   const qualifiesForCSR = qualifiesForPTC && fpl <= 250
-  let csrLevel: SubsidyCalculation['csrLevel']
+  let csrLevel: SubsidyResult['csrLevel']
   if (qualifiesForCSR) {
     if (fpl <= 150) csrLevel = 'silver_94'
     else if (fpl <= 200) csrLevel = 'silver_87'
@@ -95,159 +99,391 @@ export function calculateSubsidy(profile: UserProfile): SubsidyCalculation {
   }
 }
 
-// ── Cost estimator ───────────────────────────────────────────────────────────
+// ── Employer cost lookup ─────────────────────────────────────────────────────
 
-// Annual usage estimates based on profile
-function getUsageMultiplier(profile: UserProfile): { visits: number; rxCost: number; procedureCost: number } {
-  const base = profile.expectedHealthcareUsage === 'minimal' ? 1
+const EMPLOYER_COSTS: Record<string, {
+  employeeMonthlyPremium: [number, number]
+  deductible: [number, number]
+  oopMax: [number, number]
+  pcpCopay: number
+}> = {
+  'google':    { employeeMonthlyPremium: [0, 50],   deductible: [250, 1500], oopMax: [1500, 3000], pcpCopay: 20 },
+  'amazon':    { employeeMonthlyPremium: [50, 150],  deductible: [500, 2000], oopMax: [2000, 4000], pcpCopay: 25 },
+  'microsoft': { employeeMonthlyPremium: [0, 30],   deductible: [200, 1000], oopMax: [1000, 2500], pcpCopay: 15 },
+  'meta':      { employeeMonthlyPremium: [0, 0],    deductible: [0, 500],    oopMax: [1000, 2000], pcpCopay: 0  },
+  'apple':     { employeeMonthlyPremium: [0, 50],   deductible: [500, 1500], oopMax: [1500, 3000], pcpCopay: 20 },
+}
+
+// ── University cost lookup ───────────────────────────────────────────────────
+
+const UNIVERSITY_COSTS: Record<string, {
+  monthlyPremium: [number, number]
+  deductible: [number, number]
+  oopMax: [number, number]
+}> = {
+  'carnegie mellon':    { monthlyPremium: [180, 200], deductible: [150, 250], oopMax: [2000, 3000] },
+  'cmu':                { monthlyPremium: [180, 200], deductible: [150, 250], oopMax: [2000, 3000] },
+  'university of pittsburgh': { monthlyPremium: [140, 170], deductible: [200, 300], oopMax: [2500, 3500] },
+  'pitt':               { monthlyPremium: [140, 170], deductible: [200, 300], oopMax: [2500, 3500] },
+  'nyu':                { monthlyPremium: [220, 260], deductible: [100, 200], oopMax: [2000, 3000] },
+  'harvard':            { monthlyPremium: [200, 240], deductible: [100, 200], oopMax: [1500, 2500] },
+  'mit':                { monthlyPremium: [190, 220], deductible: [100, 200], oopMax: [1500, 2500] },
+  'stanford':           { monthlyPremium: [180, 210], deductible: [100, 200], oopMax: [1500, 2500] },
+  'university of michigan': { monthlyPremium: [160, 190], deductible: [200, 300], oopMax: [2000, 3000] },
+  'columbia':           { monthlyPremium: [230, 270], deductible: [100, 200], oopMax: [2000, 3000] },
+  'ucla':               { monthlyPremium: [150, 180], deductible: [200, 300], oopMax: [2000, 3000] },
+  'uc berkeley':        { monthlyPremium: [150, 180], deductible: [200, 300], oopMax: [2000, 3000] },
+}
+
+// ── OOP calculator (shared across plan types) ────────────────────────────────
+
+function computeOop(
+  profile: UserProfile,
+  oopMaxLow: number,
+  oopMaxHigh: number,
+  visitCopay: number,
+  rxCopayMultiplier: number,
+): { low: number; high: number } {
+  const usageMultiplier = profile.expectedHealthcareUsage === 'minimal' ? 1
     : profile.expectedHealthcareUsage === 'moderate' ? 2.5
     : 5
+  const visitCost = usageMultiplier * 4 * visitCopay
 
-  const rxPerScript = 120 * (profile.numberOfPrescriptions ?? (profile.takesRegularMedications ? 2 : 0))
-  const procedureCost = profile.expectsSurgeryOrProcedure ? 8000 : 0
-  const chronicExtra = profile.hasChronicConditions ? 2000 : 0
+  // Rx: each prescription = 30-day supply per month, annualized
+  const numRx = profile.numberOfPrescriptions ?? (profile.takesRegularMedications ? 2 : 0)
+  const rxCost = numRx * 30 * rxCopayMultiplier * 12
+
+  let oopLow = visitCost + rxCost
+  let oopHigh = visitCost * 1.5 + rxCost
+
+  // Hospital frequency
+  const hosp = profile.hospitalVisitFrequency
+  if (hosp === 'never') {
+    oopLow *= 0.6
+    oopHigh *= 0.6
+  } else if (hosp === 'regularly' || hosp === 'monthly') {
+    oopHigh = oopMaxHigh
+    oopLow = Math.max(oopLow, oopMaxLow * 0.7)
+  }
+
+  // Planned surgery/procedure: fixed $3000–5000 addition
+  if (profile.expectsSurgeryOrProcedure) {
+    oopLow += 3000
+    oopHigh += 5000
+  }
+
+  // Chronic condition: diabetes-specific costs
+  if (profile.hasChronicConditions &&
+      Array.isArray(profile.specificHealthConcerns) &&
+      profile.specificHealthConcerns.includes('diabetes')) {
+    oopLow += 2000
+    oopHigh += 4000
+  }
 
   return {
-    visits: base,
-    rxCost: rxPerScript + chronicExtra,
-    procedureCost,
+    low: Math.round(Math.min(Math.max(0, oopLow), oopMaxLow)),
+    high: Math.round(Math.min(Math.max(0, oopHigh), oopMaxHigh)),
   }
 }
 
+function oopAssumptions(profile: UserProfile): string[] {
+  const notes: string[] = [`Based on ${profile.expectedHealthcareUsage ?? 'moderate'} healthcare usage`]
+  if (profile.takesRegularMedications) {
+    notes.push(`Includes ${profile.numberOfPrescriptions ?? 1} Rx at 30-day supply pricing`)
+  }
+  if (profile.expectsSurgeryOrProcedure) notes.push('Includes $3,000–5,000 for planned procedure')
+  if (profile.hasChronicConditions &&
+      Array.isArray(profile.specificHealthConcerns) &&
+      profile.specificHealthConcerns.includes('diabetes')) {
+    notes.push('Includes $2,000–4,000 for diabetes management costs')
+  }
+  return notes
+}
+
+// ── Employer plan estimate builder ───────────────────────────────────────────
+
+function buildEmployerEstimates(profile: UserProfile, subsidy: SubsidyResult): CostEstimate[] {
+  const employerMatch = matchEmployerPlans(profile.employerName)
+  const empCosts = employerMatch ? EMPLOYER_COSTS[employerMatch.key] : null
+
+  // Default ranges when no known employer match
+  const DEFAULT_EMP: typeof EMPLOYER_COSTS[string] = {
+    employeeMonthlyPremium: [80, 400],
+    deductible: [500, 3000],
+    oopMax: [1500, 6000],
+    pcpCopay: 25,
+  }
+  const base = empCosts ?? DEFAULT_EMP
+
+  // When we know the specific plans AND the user has told us their current plan,
+  // generate one entry per named plan with narrowed costs
+  if (employerMatch && profile.currentEmployerPlan) {
+    const planNames = KNOWN_EMPLOYER_PLANS[employerMatch.key]?.plans ?? []
+    const currentInput = profile.currentEmployerPlan.toLowerCase().trim()
+
+    return planNames.map(planName => {
+      const nameUpper = planName.toUpperCase()
+      const isHDHP = nameUpper.includes('HDHP') || nameUpper.includes('HSA')
+      const isHMO = nameUpper.includes('HMO')
+
+      // Adjust costs based on plan type within the employer's range
+      let [premLow, premHigh] = base.employeeMonthlyPremium
+      let [dedLow, dedHigh] = base.deductible
+      let [oopLow, oopHigh] = base.oopMax
+      let { pcpCopay } = base
+
+      if (isHDHP) {
+        premLow = Math.max(0, premLow - 20)
+        premHigh = Math.min(premHigh, 30)
+        dedLow = Math.max(dedLow, 1500)
+        dedHigh = Math.max(dedHigh, 3000)
+        pcpCopay = 0 // HDHP: no copay until deductible met
+      } else if (isHMO) {
+        dedHigh = Math.min(dedHigh, 1000)
+        pcpCopay = Math.max(pcpCopay - 5, 10)
+      }
+      // PPO: use base range as-is
+
+      const oop = computeOop(profile, oopLow, oopHigh, pcpCopay || 25, 0.2)
+      const annualPremLow = premLow * 12
+      const annualPremHigh = premHigh * 12
+
+      const isCurrent = planName.toLowerCase().includes(currentInput) ||
+        currentInput.includes(planName.toLowerCase())
+
+      const assumptions = oopAssumptions(profile)
+      if (isHDHP) {
+        assumptions.push(`HDHP includes HSA — ${profile.employerName} contributes $500/year to your HSA`)
+      }
+
+      return {
+        planType: 'employer_sponsored' as PlanType,
+        planLabel: `${profile.employerName} — ${planName}`,
+        isCurrentPlan: isCurrent,
+        estimatedMonthlyPremium: { low: premLow, high: premHigh },
+        estimatedAnnualOutOfPocket: oop,
+        estimatedAnnualTotal: {
+          low: Math.round(annualPremLow + oop.low),
+          high: Math.round(annualPremHigh + oop.high),
+        },
+        subsidyApplied: 0,
+        assumptions,
+        bestFor: isHDHP ? 'Healthy employees who want HSA tax advantages'
+          : isHMO ? 'Lower deductible and copays within network'
+          : 'Flexibility to see any in-network specialist',
+      }
+    })
+  }
+
+  // Single generic estimate (no known employer OR currentEmployerPlan not set)
+  const oop = computeOop(profile, base.oopMax[0], base.oopMax[1], base.pcpCopay, 0.2)
+  const annualPremLow = base.employeeMonthlyPremium[0] * 12
+  const annualPremHigh = base.employeeMonthlyPremium[1] * 12
+  const label = empCosts && profile.employerName
+    ? `${profile.employerName} employer plan`
+    : 'Employer-sponsored plan'
+
+  return [{
+    planType: 'employer_sponsored',
+    planLabel: label,
+    estimatedMonthlyPremium: { low: base.employeeMonthlyPremium[0], high: base.employeeMonthlyPremium[1] },
+    estimatedAnnualOutOfPocket: oop,
+    estimatedAnnualTotal: {
+      low: Math.round(annualPremLow + oop.low),
+      high: Math.round(annualPremHigh + oop.high),
+    },
+    subsidyApplied: 0,
+    assumptions: [
+      ...oopAssumptions(profile),
+      empCosts ? `Based on typical ${profile.employerName} benefits data` : 'Best value when employer pays 50–80% of premium',
+    ],
+    bestFor: 'Best value when employer pays 50–80% of premium',
+  }]
+}
+
+// ── Main cost estimator ──────────────────────────────────────────────────────
+
 export function estimateCosts(profile: UserProfile, eligiblePlans: PlanType[]): CostEstimate[] {
-  const usage = getUsageMultiplier(profile)
   const subsidy = calculateSubsidy(profile)
+  const fpl = getFPL(profile.annualIncome, profile.householdSize)
   const estimates: CostEstimate[] = []
 
-  const planConfigs: Partial<Record<PlanType, {
-    premiumLow: number; premiumHigh: number
-    deductibleLow: number; deductibleHigh: number
-    oopMaxLow: number; oopMaxHigh: number
-    visitCopay: number; rxCopayMultiplier: number
-    bestFor: string
-  }>> = {
-    medicaid: {
-      premiumLow: 0, premiumHigh: 20,
-      deductibleLow: 0, deductibleHigh: 0,
-      oopMaxLow: 0, oopMaxHigh: 500,
-      visitCopay: 3, rxCopayMultiplier: 0.05,
-      bestFor: 'Anyone who qualifies — lowest total cost by far',
-    },
-    aca_marketplace: {
-      premiumLow: 150, premiumHigh: 600,
-      deductibleLow: 500, deductibleHigh: 7000,
-      oopMaxLow: 2000, oopMaxHigh: 9450,
-      visitCopay: 30, rxCopayMultiplier: 0.3,
-      bestFor: profile.expectedHealthcareUsage === 'high' ? 'Gold/Platinum tier for frequent care' : 'Bronze/Silver tier for occasional care',
-    },
-    employer_sponsored: {
-      premiumLow: 80, premiumHigh: 400,
-      deductibleLow: 500, deductibleHigh: 3000,
-      oopMaxLow: 1500, oopMaxHigh: 6000,
-      visitCopay: 25, rxCopayMultiplier: 0.2,
-      bestFor: 'Best value when employer pays 50–80% of premium',
-    },
-    school_plan: {
-      premiumLow: 1200, premiumHigh: 3500,
-      deductibleLow: 100, deductibleHigh: 500,
-      oopMaxLow: 1000, oopMaxHigh: 3000,
-      visitCopay: 20, rxCopayMultiplier: 0.2,
-      bestFor: 'Students at schools with comprehensive SHIP plans',
-    },
-    international_student_plan: {
-      premiumLow: 700, premiumHigh: 2000,
-      deductibleLow: 250, deductibleHigh: 1000,
-      oopMaxLow: 1500, oopMaxHigh: 5000,
-      visitCopay: 30, rxCopayMultiplier: 0.3,
-      bestFor: 'Students who can satisfy their school waiver requirement',
-    },
-    cobra: {
-      premiumLow: 500, premiumHigh: 1800,
-      deductibleLow: 500, deductibleHigh: 3000,
-      oopMaxLow: 2000, oopMaxHigh: 7000,
-      visitCopay: 30, rxCopayMultiplier: 0.25,
-      bestFor: 'Short-term bridge if your doctors are in the existing network',
-    },
-    short_term: {
-      premiumLow: 50, premiumHigh: 200,
-      deductibleLow: 2000, deductibleHigh: 10000,
-      oopMaxLow: 5000, oopMaxHigh: 25000,
-      visitCopay: 50, rxCopayMultiplier: 1.0,
-      bestFor: 'Last resort only — gaps in coverage are significant',
-    },
-  }
-
-  const planLabels: Partial<Record<PlanType, string>> = {
-    medicaid: 'Medicaid',
-    aca_marketplace: 'ACA Marketplace',
-    employer_sponsored: 'Employer-sponsored plan',
-    school_plan: 'University health plan (SHIP)',
-    international_student_plan: 'International student plan (ISP)',
-    cobra: 'COBRA continuation',
-    short_term: 'Short-term health plan',
-  }
-
   for (const plan of eligiblePlans) {
-    const cfg = planConfigs[plan]
+    // ── Employer: potentially expand to per-plan entries ──
+    if (plan === 'employer_sponsored') {
+      estimates.push(...buildEmployerEstimates(profile, subsidy))
+      continue
+    }
+
+    // ── ACA Marketplace: FPL-based premium + usage-based metal tier ──
+    if (plan === 'aca_marketplace') {
+      let premLow: number, premHigh: number
+      if (fpl < 200)      { premLow = 0;   premHigh = 50  }
+      else if (fpl < 300) { premLow = 50;  premHigh = 200 }
+      else if (fpl < 400) { premLow = 150; premHigh = 350 }
+      else                { premLow = 300; premHigh = 600 }
+
+      let dedLow: number, dedHigh: number, oopMaxLow: number, oopMaxHigh: number
+      const usage = profile.expectedHealthcareUsage
+      if (usage === 'minimal') {
+        // Bronze tier
+        dedLow = 6000; dedHigh = 7000; oopMaxLow = 8000; oopMaxHigh = 9000
+      } else if (usage === 'high') {
+        // Gold tier
+        dedLow = 500; dedHigh = 1500; oopMaxLow = 2000; oopMaxHigh = 4000
+      } else {
+        // Silver tier (default)
+        dedLow = 1500; dedHigh = 3000; oopMaxLow = 4000; oopMaxHigh = 6000
+      }
+
+      let annualPremLow = premLow * 12
+      let annualPremHigh = premHigh * 12
+      let subsidyApplied = 0
+
+      if (subsidy.qualifiesForPTC) {
+        const creditAnnualLow = subsidy.estimatedMonthlyCredit.low * 12
+        const creditAnnualHigh = subsidy.estimatedMonthlyCredit.high * 12
+        annualPremLow = Math.max(0, annualPremLow - creditAnnualHigh)
+        annualPremHigh = Math.max(0, annualPremHigh - creditAnnualLow)
+        subsidyApplied = Math.round((creditAnnualLow + creditAnnualHigh) / 2)
+      }
+
+      const oop = computeOop(profile, oopMaxLow, oopMaxHigh, 30, 0.3)
+
+      // CSR bonus: reduce OOP on Silver plans
+      let coop = oop
+      if (subsidy.qualifiesForCSR && usage !== 'minimal' && usage !== 'high') {
+        const discount = subsidy.csrLevel === 'silver_94' ? 0.3
+          : subsidy.csrLevel === 'silver_87' ? 0.5 : 0.7
+        coop = { low: Math.round(oop.low * discount), high: Math.round(oop.high * discount) }
+      }
+
+      const metalTier = usage === 'minimal' ? 'Bronze' : usage === 'high' ? 'Gold' : 'Silver'
+      const assumptions = oopAssumptions(profile)
+      if (subsidyApplied > 0) assumptions.push(`Premium Tax Credit of ~$${subsidyApplied}/year applied`)
+      if (subsidy.qualifiesForCSR) assumptions.push(`Cost-Sharing Reduction applied (${metalTier} plan)`)
+      assumptions.push(`Estimated ${metalTier} plan based on your usage level`)
+
+      estimates.push({
+        planType: 'aca_marketplace',
+        planLabel: `ACA Marketplace (${metalTier})`,
+        estimatedMonthlyPremium: {
+          low: Math.round(annualPremLow / 12),
+          high: Math.round(annualPremHigh / 12),
+        },
+        estimatedAnnualOutOfPocket: coop,
+        estimatedAnnualTotal: {
+          low: Math.round(annualPremLow + coop.low),
+          high: Math.round(annualPremHigh + coop.high),
+        },
+        subsidyApplied,
+        assumptions,
+        bestFor: usage === 'high' ? 'Gold/Platinum tier for frequent care'
+          : usage === 'minimal' ? 'Bronze tier for low usage — pay less monthly, more when you need care'
+          : 'Silver tier for occasional care — balanced premium and cost-sharing',
+      })
+      continue
+    }
+
+    // ── School plan: university-specific or generic ──
+    if (plan === 'school_plan') {
+      const uniLower = profile.university?.toLowerCase() ?? ''
+      const uniKey = Object.keys(UNIVERSITY_COSTS).find(k => uniLower.includes(k))
+      const uniCosts = uniKey ? UNIVERSITY_COSTS[uniKey] : null
+
+      const premLow = uniCosts ? uniCosts.monthlyPremium[0] : 100
+      const premHigh = uniCosts ? uniCosts.monthlyPremium[1] : 292
+      const dedLow = uniCosts ? uniCosts.deductible[0] : 100
+      const dedHigh = uniCosts ? uniCosts.deductible[1] : 500
+      const oopMaxLow = uniCosts ? uniCosts.oopMax[0] : 1000
+      const oopMaxHigh = uniCosts ? uniCosts.oopMax[1] : 3000
+
+      const oop = computeOop(profile, oopMaxLow, oopMaxHigh, 20, 0.2)
+      const annualPremLow = premLow * 12
+      const annualPremHigh = premHigh * 12
+      const label = uniKey && profile.university
+        ? `${profile.university} health plan (SHIP)`
+        : 'University health plan (SHIP)'
+
+      const assumptions = oopAssumptions(profile)
+      if (uniCosts && profile.university) {
+        assumptions.push(`Specific plan data for ${profile.university}`)
+      }
+
+      estimates.push({
+        planType: 'school_plan',
+        planLabel: label,
+        estimatedMonthlyPremium: { low: premLow, high: premHigh },
+        estimatedAnnualOutOfPocket: oop,
+        estimatedAnnualTotal: {
+          low: Math.round(annualPremLow + oop.low),
+          high: Math.round(annualPremHigh + oop.high),
+        },
+        subsidyApplied: 0,
+        assumptions,
+        bestFor: 'Students at schools with comprehensive SHIP plans',
+      })
+      continue
+    }
+
+    // ── All other plan types: generic config table ──
+    const genericConfigs: Partial<Record<PlanType, {
+      premiumLow: number; premiumHigh: number
+      oopMaxLow: number; oopMaxHigh: number
+      visitCopay: number; rxCopayMultiplier: number
+      label: string; bestFor: string
+    }>> = {
+      medicaid: {
+        premiumLow: 0, premiumHigh: 20,
+        oopMaxLow: 0, oopMaxHigh: 500,
+        visitCopay: 3, rxCopayMultiplier: 0.05,
+        label: 'Medicaid',
+        bestFor: 'Anyone who qualifies — lowest total cost by far',
+      },
+      international_student_plan: {
+        premiumLow: 58, premiumHigh: 167,
+        oopMaxLow: 1500, oopMaxHigh: 5000,
+        visitCopay: 30, rxCopayMultiplier: 0.3,
+        label: 'International student plan (ISP)',
+        bestFor: 'Students who can satisfy their school waiver requirement',
+      },
+      cobra: {
+        premiumLow: 500, premiumHigh: 1800,
+        oopMaxLow: 2000, oopMaxHigh: 7000,
+        visitCopay: 30, rxCopayMultiplier: 0.25,
+        label: 'COBRA continuation',
+        bestFor: 'Short-term bridge if your doctors are in the existing network',
+      },
+      short_term: {
+        premiumLow: 50, premiumHigh: 200,
+        oopMaxLow: 5000, oopMaxHigh: 25000,
+        visitCopay: 50, rxCopayMultiplier: 1.0,
+        label: 'Short-term health plan',
+        bestFor: 'Last resort only — gaps in coverage are significant',
+      },
+    }
+
+    const cfg = genericConfigs[plan]
     if (!cfg) continue
 
-    // Annual premium (before subsidy)
-    let annualPremiumLow = cfg.premiumLow * 12
-    let annualPremiumHigh = cfg.premiumHigh * 12
-    let subsidyApplied = 0
-
-    // Apply PTC subsidy to ACA marketplace plans
-    if (plan === 'aca_marketplace' && subsidy.qualifiesForPTC) {
-      const annualCreditLow = subsidy.estimatedMonthlyCredit.low * 12
-      const annualCreditHigh = subsidy.estimatedMonthlyCredit.high * 12
-      annualPremiumLow = Math.max(0, annualPremiumLow - annualCreditHigh)
-      annualPremiumHigh = Math.max(0, annualPremiumHigh - annualCreditLow)
-      subsidyApplied = Math.round((annualCreditLow + annualCreditHigh) / 2)
-    }
-
-    // Estimate annual out-of-pocket (visits + rx + procedures, capped at OOP max)
-    const visitCost = usage.visits * 4 * cfg.visitCopay // ~4 visits per "unit"
-    const rxCost = usage.rxCost * cfg.rxCopayMultiplier
-    let oopLow = Math.min(visitCost + rxCost + (usage.procedureCost * 0.1), cfg.oopMaxLow)
-    let oopHigh = Math.min(visitCost * 1.5 + rxCost + usage.procedureCost, cfg.oopMaxHigh)
-
-    // CSR bonus: lower OOP on Silver ACA plans
-    if (plan === 'aca_marketplace' && subsidy.qualifiesForCSR) {
-      const csrDiscount = subsidy.csrLevel === 'silver_94' ? 0.3
-        : subsidy.csrLevel === 'silver_87' ? 0.5 : 0.7
-      oopLow = Math.round(oopLow * csrDiscount)
-      oopHigh = Math.round(oopHigh * csrDiscount)
-    }
-
-    const assumptions: string[] = [
-      `Based on ${profile.expectedHealthcareUsage ?? 'moderate'} healthcare usage`,
-    ]
-    if (profile.takesRegularMedications) assumptions.push(`Includes ~${profile.numberOfPrescriptions ?? 1} Rx at this plan's formulary tier`)
-    if (profile.expectsSurgeryOrProcedure) assumptions.push('Includes estimate for planned procedure')
-    if (subsidyApplied > 0) assumptions.push(`Premium Tax Credit of ~$${subsidyApplied}/year applied`)
-    if (subsidy.qualifiesForCSR && plan === 'aca_marketplace') assumptions.push('Cost-Sharing Reduction applied (Silver plan)')
+    const annualPremLow = cfg.premiumLow * 12
+    const annualPremHigh = cfg.premiumHigh * 12
+    const oop = computeOop(profile, cfg.oopMaxLow, cfg.oopMaxHigh, cfg.visitCopay, cfg.rxCopayMultiplier)
 
     estimates.push({
       planType: plan,
-      planLabel: planLabels[plan] ?? plan,
-      estimatedMonthlyPremium: {
-        low: Math.round(annualPremiumLow / 12),
-        high: Math.round(annualPremiumHigh / 12),
-      },
-      estimatedAnnualOutOfPocket: {
-        low: Math.round(oopLow),
-        high: Math.round(oopHigh),
-      },
+      planLabel: cfg.label,
+      estimatedMonthlyPremium: { low: cfg.premiumLow, high: cfg.premiumHigh },
+      estimatedAnnualOutOfPocket: oop,
       estimatedAnnualTotal: {
-        low: Math.round(annualPremiumLow + oopLow),
-        high: Math.round(annualPremiumHigh + oopHigh),
+        low: Math.round(annualPremLow + oop.low),
+        high: Math.round(annualPremHigh + oop.high),
       },
-      subsidyApplied,
-      assumptions,
+      subsidyApplied: 0,
+      assumptions: oopAssumptions(profile),
       bestFor: cfg.bestFor,
     })
   }
 
-  // Sort by estimated annual total (low end)
   return estimates.sort((a, b) => a.estimatedAnnualTotal.low - b.estimatedAnnualTotal.low)
 }

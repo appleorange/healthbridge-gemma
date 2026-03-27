@@ -19,13 +19,14 @@ const MAX_MB = 10
 
 interface Props {
   userProfile: UserProfile
+  documents: ParsedDocument[]
+  onDocumentsChange: (docs: ParsedDocument[]) => void
 }
 
 type DocTab = 'upload' | 'compare'
 
-export default function DocumentHub({ userProfile }: Props) {
+export default function DocumentHub({ userProfile, documents, onDocumentsChange }: Props) {
   const [docTab, setDocTab] = useState<DocTab>('upload')
-  const [documents, setDocuments] = useState<ParsedDocument[]>([])
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [expandedDoc, setExpandedDoc] = useState<string | null>(null)
@@ -67,7 +68,7 @@ export default function DocumentHub({ userProfile }: Props) {
         }
 
         const parsed: ParsedDocument = await res.json()
-        setDocuments(prev => [...prev, parsed])
+        onDocumentsChange([...documents, parsed])
         setExpandedDoc(parsed.id)
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to parse document.')
@@ -78,7 +79,7 @@ export default function DocumentHub({ userProfile }: Props) {
   }
 
   function removeDocument(id: string) {
-    setDocuments(prev => prev.filter(d => d.id !== id))
+    onDocumentsChange(documents.filter(d => d.id !== id))
     setCompareNarrative(null)
     if (expandedDoc === id) setExpandedDoc(null)
   }
