@@ -22,6 +22,7 @@ interface PlanResult {
 const CONFIDENCE_BADGE: Record<string, { label: string; className: string }> = {
   confirmed: { label: 'Confirmed via CMS', className: 'bg-green-100 text-green-700' },
   likely:    { label: 'AI estimate — verify with plan', className: 'bg-amber-100 text-amber-700' },
+  unlikely:  { label: 'Likely out-of-network — verify with plan', className: 'bg-red-100 text-red-700' },
   unknown:   { label: 'Unknown — call plan to verify', className: 'bg-gray-100 text-gray-600' },
 }
 
@@ -33,8 +34,35 @@ export default function NetworkChecker({ profile, planCards }: Props) {
   const [hasChecked, setHasChecked] = useState(false)
   const autoRunRef = useRef(false)
 
-  // Only check the top 4 plans to avoid too many simultaneous calls
-  const plansToCheck = planCards.slice(0, 4)
+  // If primary recommendation is parent_plan and profile has parent plan details,
+  // add a synthetic plan card for it
+  const parentPlanCard = (
+    profile.currentPlanType === 'parent_employer' &&
+    profile.parentPlanInsurer
+  ) ? {
+    id: 'parent_plan_synthetic',
+    name: `${profile.parentPlanInsurer} ${profile.parentPlanType?.toUpperCase() ?? 'Plan'}`,
+    issuer: profile.parentPlanInsurer,
+    planType: 'parent_plan' as PlanType,
+    networkType: (profile.parentPlanType === 'ppo' ? 'PPO' : profile.parentPlanType === 'hmo' ? 'HMO' : profile.parentPlanType === 'hdhp' ? 'HDHP' : 'PPO') as PlanCard['networkType'],
+    monthlyPremium: 0,
+    deductible: 0,
+    oopMax: 0,
+    pcpCopay: null,
+    specialistCopay: null,
+    benefits: [],
+    fitScore: 100,
+    fitReasons: ['Your current plan'],
+    isReal: false,
+    year: 2026,
+    isPrimaryRecommendation: true,
+    isCurrentPlan: true,
+  } : null
+
+  const plansToCheck = [
+    ...(parentPlanCard ? [parentPlanCard] : []),
+    ...planCards.slice(0, parentPlanCard ? 3 : 4),
+  ]
 
   async function checkNetwork(name: string, type: ProviderType, zip: string) {
     if (!name.trim() || !zip.trim()) return
@@ -62,6 +90,7 @@ export default function NetworkChecker({ profile, planCards }: Props) {
               zipCode: zip,
               planId: plan.isReal ? plan.id : undefined,
               planName: plan.name,
+              planNetworkType: plan.networkType,
             }),
           })
           const data: NetworkCheckResult = await res.json()
@@ -165,7 +194,7 @@ export default function NetworkChecker({ profile, planCards }: Props) {
               key={plan.id}
               className={`rounded-2xl border p-4 ${
                 result?.inNetwork === true ? 'border-green-200 bg-green-50'
-                : result?.inNetwork === false ? 'border-red-200 bg-red-50'
+                : (result?.inNetwork === false || result?.confidence === 'unlikely') ? 'border-red-200 bg-red-50'
                 : 'border-gray-100 bg-white'
               }`}
             >
@@ -189,7 +218,7 @@ export default function NetworkChecker({ profile, planCards }: Props) {
                   <HelpCircle className="w-6 h-6 text-gray-300 flex-shrink-0" />
                 ) : result?.inNetwork === true ? (
                   <CheckCircle className="w-6 h-6 text-green-500 flex-shrink-0" />
-                ) : result?.inNetwork === false ? (
+                ) : (result?.inNetwork === false || result?.confidence === 'unlikely') ? (
                   <XCircle className="w-6 h-6 text-red-500 flex-shrink-0" />
                 ) : (
                   <HelpCircle className="w-6 h-6 text-gray-300 flex-shrink-0" />
@@ -207,15 +236,21 @@ export default function NetworkChecker({ profile, planCards }: Props) {
               {!loading && !error && result && (
                 <div className="space-y-2">
                   {/* In-network status */}
-                  <p className={`text-sm font-semibold ${
-                    result.inNetwork === true ? 'text-green-700'
-                    : result.inNetwork === false ? 'text-red-700'
-                    : 'text-gray-600'
-                  }`}>
-                    {result.inNetwork === true ? 'In network'
-                    : result.inNetwork === false ? 'Out of network'
-                    : 'Could not confirm'}
-                  </p>
+                  {result.inNetwork === null && result.confidence !== 'unlikely' ? (
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-gray-600">Network status unclear</p>
+                      {result.reasoning && (
+                        <p className="text-xs text-gray-600 leading-relaxed">{result.reasoning}</p>
+                      )}
+                      {result.suggestion && (
+                        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-2 py-1.5">{result.suggestion}</p>
+                      )}
+                    </div>
+                  ) : result.inNetwork === true ? (
+                    <p className="text-sm font-medium text-green-700">Likely in-network</p>
+                  ) : (
+                    <p className="text-sm font-medium text-red-700">Likely out-of-network</p>
+                  )}
 
                   {/* Address/specialty if known */}
                   {result.address && (
@@ -256,13 +291,11 @@ export default function NetworkChecker({ profile, planCards }: Props) {
                   )}
 
                   {/* AI reasoning */}
-                  {result.source === 'ai_estimate' && result.reasoning && (
-                    <p className="text-xs text-gray-500 mt-1">{result.reasoning}</p>
-                  )}
-
-                  {/* Suggestion for null/unknown */}
-                  {result.inNetwork === null && result.suggestion && (
-                    <p className="text-xs text-gray-500 mt-1">{result.suggestion}</p>
+                  {result.source === 'ai_estimate' && result.reasoning && result.inNetwork !== null && (
+                    <div className="mt-2 p-2 bg-gray-50 border border-gray-100 rounded-lg">
+                      <p className="text-xs font-medium text-gray-500 mb-0.5">AI estimate</p>
+                      <p className="text-xs text-gray-700 leading-relaxed">{result.reasoning}</p>
+                    </div>
                   )}
 
                   {/* Confidence badge + call to verify */}

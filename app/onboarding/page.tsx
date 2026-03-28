@@ -38,7 +38,25 @@ export default function OnboardingPage() {
   })
 
   function update(field: string, value: unknown) {
-    setProfile(prev => ({ ...prev, [field]: value }))
+    setProfile(prev => {
+      const next = { ...prev, [field]: value }
+      if (field === 'currentPlanType' && value !== 'parent_employer') {
+        next.parentPlanInsurer = undefined
+        next.parentPlanType = undefined
+        next.parentPlanPremiumContribution = undefined
+        next.parentPlanSatisfied = undefined
+        next.agingOffDate = undefined
+      }
+      if (field === 'currentlyInsured' && value === false) {
+        next.currentPlanType = undefined
+        next.parentPlanInsurer = undefined
+        next.parentPlanType = undefined
+        next.parentPlanPremiumContribution = undefined
+        next.parentPlanSatisfied = undefined
+        next.agingOffDate = undefined
+      }
+      return next
+    })
   }
 
   async function handleNext() {

@@ -32,7 +32,7 @@ export function calculateSubsidy(profile: UserProfile): SubsidyResult {
 
   const acaEligibleStatuses = ['us_citizen', 'green_card', 'refugee_asylee', 'l1', 'o1', 'tn']
   const isACAEligible = acaEligibleStatuses.includes(profile.immigrationStatus)
-  const hasAffordableEmployerPlan = profile.hasEmployerInsurance &&
+  const hasAffordableEmployerPlan = profile.hasEmployerInsurance === true &&
     ['employed_fulltime', 'employed_parttime'].includes(profile.employmentStatus)
 
   const MEDICAID_EXPANSION_STATES = [

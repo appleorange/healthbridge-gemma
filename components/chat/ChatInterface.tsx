@@ -132,7 +132,7 @@ export default function ChatInterface({ userProfile, autoSendPrompt, onAutoPromp
       console.error(e)
       setMessages(prev => prev.map(m =>
         m.id === assistantId
-          ? { ...m, content: 'Sorry, something went wrong. Please try again.' }
+          ? { ...m, content: `Sorry, something went wrong: ${e instanceof Error ? e.message : 'Unknown error'}. Check that your API key is set in .env.local and restart the dev server.` }
           : m
       ))
     } finally {

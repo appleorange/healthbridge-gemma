@@ -8,7 +8,7 @@ const client = new Anthropic({
 })
 
 export async function POST(req: NextRequest) {
-  const { denialInfo, analysis } = await req.json()
+  const { denialInfo, analysis, planType, state, age } = await req.json()
 
   const stream = await client.messages.stream({
     model: 'claude-sonnet-4-6',
@@ -16,33 +16,28 @@ export async function POST(req: NextRequest) {
     messages: [
       {
         role: 'user',
-        content: `Write a professional health insurance appeal letter based on the following denial information.
+        content: `Write a formal internal appeal letter for this denied claim. Write in first person. Do not use placeholder brackets — use the actual information provided.
 
-Denial details:
-- Plan: ${denialInfo.planName}
-- Service denied: ${denialInfo.serviceDescription}
-- Date of denial: ${denialInfo.denialDate}
-- Denial reason: ${denialInfo.denialReason}
-${denialInfo.denialCode ? `- Denial code: ${denialInfo.denialCode}` : ''}
+Plan/Insurer: ${denialInfo.planName}
+Service denied: ${denialInfo.serviceDescription}
+Date of denial: ${denialInfo.denialDate}
+Denial reason: ${denialInfo.denialReason}
+${denialInfo.denialCode ? `Denial code: ${denialInfo.denialCode}` : ''}
+Denial type: ${analysis.denialType}
+State: ${state ?? 'unknown'}
+${age ? `Patient age: ${age}` : ''}
 
-Analysis findings:
-- Denial type: ${analysis.denialType}
-- Key arguments: ${analysis.keyArguments.join('; ')}
-- Recommended approach: ${analysis.recommendedApproach}
+Appeal grounds to use: ${analysis.keyArguments.join('; ')}
 
-Write a formal appeal letter addressed to the Appeals & Grievances Department at ${denialInfo.planName}.
-Use [Patient Name], [Member ID], [Date of Birth], [Address], [Phone], [Treating Physician Name], [Date of Service] as placeholders.
+Write a professional appeal letter under 400 words that includes:
+1. Clear statement of what is being appealed and the denial date
+2. Statement that this is a formal first-level internal appeal
+3. Specific grounds for appeal using the grounds listed above
+4. Request for the specific clinical criteria used in the denial (this is a legal right under ERISA and ACA)
+5. Statement of intent to pursue external independent review if internal appeal is denied
+6. Clear request for written response within the legally required timeframe (30 days for standard, 72 hours for urgent care)
 
-The letter must:
-1. Open with the formal denial date and reference number (use [Reference/Claim Number] as placeholder)
-2. Clearly state the service being appealed and why it is medically necessary
-3. Cite the specific legal basis for the appeal (ACA Section 2719 for non-grandfathered plans, ERISA for employer plans, or state law as applicable)
-4. Present the key medical necessity arguments from the analysis above
-5. Reference clinical guidelines or peer-reviewed standards where relevant
-6. Request a specific action: approval of the service or, if denied, escalation to external independent review
-7. Close professionally with the patient's contact information and a clear deadline for response
-
-Write the complete letter text only — no headers, no explanation, no commentary outside the letter itself.`,
+Do not include any placeholder text in brackets. Use the actual plan name, service, and dates provided.`,
       },
     ],
   })

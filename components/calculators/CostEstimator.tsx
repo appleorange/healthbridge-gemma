@@ -4,6 +4,11 @@ import { TrendingDown, Info, ChevronRight, Sparkles, FileText } from 'lucide-rea
 import { estimateCosts, calculateSubsidy } from '@/lib/calculators/cost-estimator'
 import type { UserProfile, PlanType, CostEstimate, ParsedDocument } from '@/types'
 
+function formatRange(low: number, high: number, prefix = '$', suffix = ''): string {
+  if (low === high) return `${prefix}${low.toLocaleString()}${suffix}`
+  return `${prefix}${low.toLocaleString()}–${high.toLocaleString()}${suffix}`
+}
+
 interface Props {
   profile: UserProfile
   eligiblePlans: PlanType[]
@@ -207,13 +212,13 @@ export default function CostEstimator({ profile, eligiblePlans, primaryRecommend
             )}
             <ReceiptLine
               label={creditPerMonth > 0 ? 'Your net monthly premium' : 'Monthly premium'}
-              value={`$${primaryEst.estimatedMonthlyPremium.low}–$${primaryEst.estimatedMonthlyPremium.high}/mo`}
+              value={`${formatRange(primaryEst.estimatedMonthlyPremium.low, primaryEst.estimatedMonthlyPremium.high)}/mo`}
               bold
               divider={creditPerMonth > 0}
             />
             <ReceiptLine
               label="Annual premiums"
-              value={`$${(primaryEst.estimatedMonthlyPremium.low * 12).toLocaleString()}–$${(primaryEst.estimatedMonthlyPremium.high * 12).toLocaleString()}/yr`}
+              value={`${formatRange(primaryEst.estimatedMonthlyPremium.low * 12, primaryEst.estimatedMonthlyPremium.high * 12)}/yr`}
               indent
             />
 
@@ -247,7 +252,7 @@ export default function CostEstimator({ profile, eligiblePlans, primaryRecommend
             {/* Total */}
             <ReceiptLine
               label="ESTIMATED ANNUAL TOTAL"
-              value={`$${primaryEst.estimatedAnnualTotal.low.toLocaleString()}–$${primaryEst.estimatedAnnualTotal.high.toLocaleString()}`}
+              value={formatRange(primaryEst.estimatedAnnualTotal.low, primaryEst.estimatedAnnualTotal.high)}
               bold
               divider
             />
@@ -489,19 +494,19 @@ export default function CostEstimator({ profile, eligiblePlans, primaryRecommend
                   <div className="flex justify-between gap-2">
                     <span className="text-gray-500">Monthly</span>
                     <span className={`font-medium tabular-nums ${i === 0 ? 'text-brand-800' : 'text-gray-800'}`}>
-                      ${est.estimatedMonthlyPremium.low}–{est.estimatedMonthlyPremium.high}
+                      {formatRange(est.estimatedMonthlyPremium.low, est.estimatedMonthlyPremium.high)}
                     </span>
                   </div>
                   <div className="flex justify-between gap-2">
                     <span className="text-gray-500">OOP est.</span>
                     <span className={`font-medium tabular-nums ${i === 0 ? 'text-brand-800' : 'text-gray-800'}`}>
-                      ${est.estimatedAnnualOutOfPocket.low.toLocaleString()}–{est.estimatedAnnualOutOfPocket.high.toLocaleString()}
+                      {formatRange(est.estimatedAnnualOutOfPocket.low, est.estimatedAnnualOutOfPocket.high)}
                     </span>
                   </div>
                   <div className={`flex justify-between gap-2 pt-1.5 border-t ${i === 0 ? 'border-brand-200' : 'border-gray-200'}`}>
                     <span className="font-semibold text-gray-700">Annual</span>
                     <span className={`font-bold tabular-nums ${i === 0 ? 'text-brand-700' : 'text-gray-700'}`}>
-                      ${est.estimatedAnnualTotal.low.toLocaleString()}–{est.estimatedAnnualTotal.high.toLocaleString()}
+                      {formatRange(est.estimatedAnnualTotal.low, est.estimatedAnnualTotal.high)}
                     </span>
                   </div>
                 </div>

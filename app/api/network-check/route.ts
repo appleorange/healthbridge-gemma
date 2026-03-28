@@ -13,19 +13,33 @@ export interface NetworkCheckResult {
   address?: string
   specialty?: string
   reasoning?: string
-  confidence: 'confirmed' | 'likely' | 'unknown'
+  confidence: 'confirmed' | 'likely' | 'unlikely' | 'unknown'
   suggestion?: string
   source: 'cms_api' | 'ai_estimate' | 'unknown'
 }
 
+const KNOWN_SYSTEMS: Record<string, string> = {
+  'sutter': 'Sutter Health operates a largely closed network in Northern California. Most non-Sutter insurance plans cover Sutter providers as out-of-network only.',
+  'kaiser': 'Kaiser Permanente is exclusively in-network only for Kaiser plans. No other insurance plans cover Kaiser providers as in-network.',
+  'ucsf': 'UCSF Health participates in many PPO networks in the Bay Area but generally not HMO networks.',
+  'upmc': 'UPMC operates its own health plan. UPMC providers are often out-of-network for non-UPMC plans in western Pennsylvania.',
+  'mayo': 'Mayo Clinic has selective network participation — in-network for some Blue Cross Blue Shield plans and select PPOs.',
+  'cleveland clinic': 'Cleveland Clinic participates in many major PPO networks but has limited HMO participation.',
+  'cedars': 'Cedars-Sinai participates in many major networks in Los Angeles including most PPO plans.',
+  'stanford': 'Stanford Health Care participates in many PPO networks in the Bay Area.',
+  'dignity': 'Dignity Health / CommonSpirit participates in most major insurance networks.',
+  'hca': 'HCA Healthcare hospitals participate in most major insurance networks.',
+}
+
 export async function POST(req: Request) {
   try {
-    const { providerName, providerType, zipCode, planId, planName } = await req.json() as {
+    const { providerName, providerType, zipCode, planId, planName, planNetworkType } = await req.json() as {
       providerName: string
       providerType: 'doctor' | 'hospital' | 'any'
       zipCode: string
       planId?: string
       planName?: string
+      planNetworkType?: string
     }
 
     // ── Try CMS Provider Directory if planId is available ──
@@ -71,18 +85,44 @@ export async function POST(req: Request) {
     }
 
     // ── AI estimate fallback ──
+    const providerLower = providerName.toLowerCase()
+    const systemNote = Object.entries(KNOWN_SYSTEMS).find(([key]) => providerLower.includes(key))?.[1] ?? ''
+
     const message = await client.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 500,
       messages: [{
         role: 'user',
-        content: `A user wants to know if ${providerName} (${providerType}) near ZIP ${zipCode} is likely in-network for ${planName ?? 'their health plan'}. Based on your knowledge of provider networks, give a best estimate. Respond only with JSON: { "inNetwork": boolean | null, "reasoning": string, "confidence": "likely" | "unknown", "suggestion": string }. If you don't have enough information say inNetwork: null and explain what to do.`,
+        content: `A patient wants to check if their doctor/hospital is in-network for their health insurance plan.
+
+Provider: ${providerName}
+Provider type: ${providerType}
+ZIP code: ${zipCode}
+Insurance plan: ${planName ?? 'unknown plan'}
+Network type: ${planNetworkType ?? 'unknown'}
+
+${systemNote ? `Important background: ${systemNote}` : ''}
+
+Instructions:
+- PPO plans generally have broad networks. Unless this is a known closed-network provider (like Kaiser or Sutter), PPO plans often DO cover providers.
+- HMO plans have restricted networks — only cover providers in their specific network.
+- If the provider is part of a large well-known health system (UCSF, Stanford, Mayo, Cleveland Clinic), they often participate in many major networks.
+- Only say "likely out of network" if you have a specific reason — not just because you are uncertain.
+- If you genuinely don't know, say inNetwork: null with confidence "unknown".
+
+Respond ONLY with valid JSON, no other text:
+{
+  "inNetwork": true or false or null,
+  "confidence": "likely" or "unlikely" or "unknown",
+  "reasoning": "one clear specific sentence",
+  "suggestion": "what to do to verify"
+}`,
       }],
     })
 
     const text = message.content[0].type === 'text' ? message.content[0].text : '{}'
     const jsonMatch = text.match(/\{[\s\S]*\}/)
-    let aiResult: { inNetwork: boolean | null; reasoning: string; confidence: 'likely' | 'unknown'; suggestion: string }
+    let aiResult: { inNetwork: boolean | null; reasoning: string; confidence: 'likely' | 'unlikely' | 'unknown'; suggestion: string }
     try {
       aiResult = jsonMatch ? JSON.parse(jsonMatch[0]) : null
     } catch {
@@ -95,7 +135,7 @@ export async function POST(req: Request) {
       planName: planName ?? 'Your plan',
       planId: planId ?? '',
       reasoning: aiResult?.reasoning,
-      confidence: (aiResult?.confidence ?? 'unknown') as 'likely' | 'unknown',
+      confidence: (aiResult?.confidence ?? 'unknown') as 'likely' | 'unlikely' | 'unknown',
       suggestion: aiResult?.suggestion ?? 'Call the member services number on your insurance card to verify.',
       source: 'ai_estimate',
     } satisfies NetworkCheckResult)

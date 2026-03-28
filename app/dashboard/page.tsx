@@ -110,6 +110,7 @@ export default function DashboardPage() {
   const [eligibility, setEligibility] = useState<EligibilityResult | null>(null)
   const [tab, setTab] = useState<Tab>('recommendation')
   const [toolsSubTab, setToolsSubTab] = useState<ToolsSubTab>('chat')
+  const [exploreSubTab, setExploreSubTab] = useState<'plans' | 'costs' | 'network'>('plans')
   const [expandedPlan, setExpandedPlan] = useState<PlanType | null>(null)
   const [showFlowchart, setShowFlowchart] = useState(false)
   const [showTimeline, setShowTimeline] = useState(false)
@@ -217,7 +218,7 @@ export default function DashboardPage() {
             if (!est) return null
             return (
               <span className="text-xs bg-brand-500 text-white border border-brand-400 px-2.5 py-1 rounded-full font-medium">
-                Est. ${est.estimatedMonthlyPremium.low}–${est.estimatedMonthlyPremium.high}/mo
+                Est. {est.estimatedMonthlyPremium.low === est.estimatedMonthlyPremium.high ? `$${est.estimatedMonthlyPremium.low}` : `$${est.estimatedMonthlyPremium.low}–$${est.estimatedMonthlyPremium.high}`}/mo
               </span>
             )
           })()}
@@ -313,7 +314,7 @@ export default function DashboardPage() {
                             )}
                             {est && (
                               <span className="text-xs text-gray-400">
-                                ~${est.estimatedMonthlyPremium.low}–${est.estimatedMonthlyPremium.high}/mo
+                                ~{est.estimatedMonthlyPremium.low === est.estimatedMonthlyPremium.high ? `$${est.estimatedMonthlyPremium.low}` : `$${est.estimatedMonthlyPremium.low}–$${est.estimatedMonthlyPremium.high}`}/mo
                               </span>
                             )}
                           </div>
@@ -495,102 +496,101 @@ export default function DashboardPage() {
 
         {/* ─── EXPLORE TAB ────────────────────────────────────────── */}
         {tab === 'explore' && (
-          <div className="max-w-2xl mx-auto px-6 py-8 space-y-10 w-full">
-
-            {/* Plans near me */}
-            <section>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-base font-semibold text-gray-900">Plans in your area</h3>
-                {!plansFetched && !plansLoading && (
-                  <button onClick={fetchPlans} className="text-xs text-brand-600 font-medium hover:text-brand-800">Load plans</button>
-                )}
+          <>
+            {/* Sub-tab bar */}
+            <div className="bg-white border-b border-gray-100 px-4">
+              <div className="flex gap-0 max-w-2xl mx-auto">
+                {([
+                  { id: 'plans' as const, label: 'Plans near me' },
+                  { id: 'costs' as const, label: 'Cost breakdown' },
+                  { id: 'network' as const, label: 'Network checker' },
+                ]).map(st => (
+                  <button
+                    key={st.id}
+                    onClick={() => setExploreSubTab(st.id)}
+                    className={`px-4 py-3 text-sm font-medium border-b-2 transition-all ${
+                      exploreSubTab === st.id
+                        ? 'border-brand-500 text-brand-700'
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    {st.label}
+                  </button>
+                ))}
               </div>
+            </div>
 
-              <div className="mb-3 p-3 bg-brand-50 border border-brand-200 rounded-xl text-sm text-brand-800 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <Sparkles className="w-4 h-4 text-brand-500 flex-shrink-0" />
-                  <span>Showing plans based on your eligibility. AI recommends <strong>{primary.label}</strong>.</span>
-                </div>
-              </div>
+            <div className="max-w-2xl mx-auto px-6 py-8 w-full">
 
-              {!profile.zipCode && (
-                <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700 flex items-center gap-2">
-                  <MapPin className="w-4 h-4 flex-shrink-0" />
-                  No ZIP code on file — showing estimated plans. Add your ZIP in onboarding for real results.
+              {exploreSubTab === 'plans' && (
+                <div className="space-y-6">
+                  <div className="p-3 bg-brand-50 border border-brand-200 rounded-xl text-sm text-brand-800 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Sparkles className="w-4 h-4 text-brand-500 flex-shrink-0" />
+                      <span>AI recommends: <strong>{primary.label}</strong></span>
+                    </div>
+                    <button onClick={() => setTab('recommendation')} className="text-xs text-brand-600 font-medium whitespace-nowrap">Why? →</button>
+                  </div>
+                  {!profile.zipCode && (
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700 flex items-center gap-2">
+                      <MapPin className="w-4 h-4 flex-shrink-0" />
+                      No ZIP code on file — showing estimated plans. Add your ZIP in onboarding for real results.
+                    </div>
+                  )}
+                  {compareList.length > 0 && (
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-800 flex items-center justify-between gap-2">
+                      <span>{compareList.length} plan{compareList.length > 1 ? 's' : ''} selected for comparison</span>
+                      <button onClick={() => setCompareList([])} className="text-xs text-blue-600 font-medium">Clear</button>
+                    </div>
+                  )}
+                  <PlanCards
+                    plans={planCards}
+                    loading={plansLoading}
+                    estimates={eligibility.costEstimates ?? []}
+                    compareList={compareList}
+                    onToggleCompare={toggleCompare}
+                  />
+                  {compareCards.length >= 2 && (
+                    <PlanComparison plans={compareCards} onRemove={id => setCompareList(prev => prev.filter(p => p !== id))} />
+                  )}
                 </div>
               )}
 
-              {compareList.length > 0 && (
-                <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-800 flex items-center justify-between gap-2">
-                  <span>{compareList.length} plan{compareList.length > 1 ? 's' : ''} selected for comparison</span>
-                  <button onClick={() => setCompareList([])} className="text-xs text-blue-600 font-medium hover:text-blue-800">Clear</button>
+              {exploreSubTab === 'costs' && (
+                <div className="space-y-4">
+                  <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-100 rounded-xl">
+                    <Sparkles className="w-3.5 h-3.5 text-blue-500 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-blue-700">
+                      Costs are estimated ranges based on your health profile. The AI recommendation accounts for both cost and coverage quality.
+                    </p>
+                  </div>
+                  <CostEstimator
+                    profile={profile}
+                    eligiblePlans={eligibility.eligiblePlans}
+                    primaryRecommendation={eligibility.primaryRecommendation}
+                    onSeeFullPlans={() => setExploreSubTab('plans')}
+                    documentPlans={documents.filter(d => d.planDetails && Object.values(d.planDetails).some(v => v))}
+                  />
                 </div>
               )}
 
-              <PlanCards
-                plans={planCards}
-                loading={plansLoading}
-                estimates={eligibility.costEstimates ?? []}
-                compareList={compareList}
-                onToggleCompare={toggleCompare}
-              />
-            </section>
-
-            {/* Plan comparison */}
-            {compareCards.length >= 2 && (
-              <section>
-                <PlanComparison plans={compareCards} onRemove={id => setCompareList(prev => prev.filter(p => p !== id))} />
-              </section>
-            )}
-
-            {/* Cost breakdown */}
-            <section>
-              <h3 className="text-base font-semibold text-gray-900 mb-1">Cost Breakdown</h3>
-              <p className="text-sm text-gray-500 mb-4">
-                Projected annual costs across your eligible plans, including subsidies and expected usage.
-              </p>
-              <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-100 rounded-xl mb-6">
-                <Sparkles className="w-3.5 h-3.5 text-blue-500 flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-blue-700">
-                  Costs are estimated ranges based on your health profile. The AI recommendation accounts for both cost and coverage quality.
-                </p>
-              </div>
-              <CostEstimator
-                profile={profile}
-                eligiblePlans={eligibility.eligiblePlans}
-                primaryRecommendation={eligibility.primaryRecommendation}
-                onSeeFullPlans={() => setTab('explore')}
-                documentPlans={documents.filter(d => d.planDetails && Object.values(d.planDetails).some(v => v))}
-              />
-            </section>
-
-            {/* Network checker */}
-            <section>
-              <h3 className="text-base font-semibold text-gray-900 mb-1">Network Checker</h3>
-              <p className="text-sm text-gray-500 mb-4">
-                Check if your doctors and hospitals are covered before you enroll.
-              </p>
-              {profile.preferredDoctors && (
-                <button
-                  onClick={() => {
-                    const prompt = `Based on my profile and preferred doctors (${profile.preferredDoctors}), which of my eligible plans is most likely to keep my current providers in-network and why?`
-                    setChatAutoPrompt(prompt)
-                    setTab('tools')
-                    setToolsSubTab('chat')
-                  }}
-                  className="mb-6 w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-brand-50 border border-brand-200 text-brand-700 text-sm font-medium hover:bg-brand-100 transition-all"
-                >
-                  <MessageCircle className="w-4 h-4" />
-                  Ask AI about my providers
-                </button>
+              {exploreSubTab === 'network' && (
+                <div className="space-y-4">
+                  {profile.preferredDoctors && (
+                    <div className="p-2 bg-blue-50 border border-blue-100 rounded-lg text-xs text-blue-700">
+                      Pre-filled from your profile: {profile.preferredDoctors}
+                    </div>
+                  )}
+                  <NetworkChecker
+                    profile={profile}
+                    eligiblePlans={eligibility.eligiblePlans}
+                    planCards={planCards}
+                  />
+                </div>
               )}
-              <NetworkChecker
-                profile={profile}
-                eligiblePlans={eligibility.eligiblePlans}
-                planCards={planCards}
-              />
-            </section>
-          </div>
+
+            </div>
+          </>
         )}
 
         {/* ─── TOOLS TAB ──────────────────────────────────────────── */}
@@ -656,7 +656,7 @@ export default function DashboardPage() {
                 <Scale className="w-4 h-4 text-gray-400" />
                 <h3 className="text-base font-semibold text-gray-900">Appeal Assistant</h3>
               </div>
-              <AppealAssistant />
+              <AppealAssistant userProfile={profile} eligibilityResult={eligibility} />
             </section>
 
             {/* Navigator finder */}

@@ -1,6 +1,12 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { Send, Loader, CheckCircle, AlertCircle, Copy, ChevronRight, FileText } from 'lucide-react'
+import type { UserProfile, EligibilityResult } from '@/types'
+
+interface Props {
+  userProfile?: UserProfile
+  eligibilityResult?: EligibilityResult
+}
 
 type Step = 'entry' | 'analysis' | 'draft' | 'tracking'
 
@@ -29,7 +35,7 @@ const EMPTY_DENIAL: DenialInfo = {
   denialCode: '',
 }
 
-export default function AppealAssistant() {
+export default function AppealAssistant({ userProfile, eligibilityResult }: Props) {
   const [step, setStep] = useState<Step>('entry')
   const [denialInfo, setDenialInfo] = useState<DenialInfo>(EMPTY_DENIAL)
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null)
@@ -45,9 +51,28 @@ export default function AppealAssistant() {
         const data = JSON.parse(pending)
         setDenialInfo(prev => ({ ...prev, ...data }))
         sessionStorage.removeItem('hb_pending_denial')
+      } else if (userProfile) {
+        // Pre-fill plan name from current coverage if available
+        const planLabels: Record<string, string> = {
+          employer: userProfile.parentPlanInsurer ?? userProfile.employerName ?? 'Employer plan',
+          aca_marketplace: 'ACA Marketplace plan',
+          medicaid: 'Medicaid',
+          school_plan: userProfile.university ? `${userProfile.university} SHIP` : 'University health plan',
+          isp: 'International student plan',
+          cobra: 'COBRA continuation',
+          short_term: 'Short-term health plan',
+        }
+        const planName = userProfile.currentPlanType
+          ? (planLabels[userProfile.currentPlanType] ?? userProfile.currentPlanType)
+          : (eligibilityResult?.primaryRecommendation
+              ? (planLabels[eligibilityResult.primaryRecommendation] ?? '')
+              : '')
+        if (planName) {
+          setDenialInfo(prev => ({ ...prev, planName: prev.planName || planName }))
+        }
       }
     } catch {}
-  }, [])
+  }, [userProfile, eligibilityResult])
 
   async function analyzeAppeal() {
     setLoading(true)
@@ -56,7 +81,12 @@ export default function AppealAssistant() {
       const res = await fetch('/api/appeal/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(denialInfo),
+        body: JSON.stringify({
+          ...denialInfo,
+          planType: eligibilityResult?.primaryRecommendation ?? 'unknown',
+          immigrationStatus: userProfile?.immigrationStatus ?? 'unknown',
+          state: userProfile?.state ?? 'unknown',
+        }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Analysis failed')
@@ -78,7 +108,13 @@ export default function AppealAssistant() {
       const res = await fetch('/api/appeal/draft', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ denialInfo, analysis }),
+        body: JSON.stringify({
+          denialInfo,
+          analysis,
+          planType: eligibilityResult?.primaryRecommendation ?? 'unknown',
+          state: userProfile?.state ?? 'unknown',
+          age: userProfile?.age ?? null,
+        }),
       })
       if (!res.ok || !res.body) throw new Error('Draft failed')
       const reader = res.body.getReader()

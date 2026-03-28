@@ -69,12 +69,18 @@ function StarRating({ rating }: { rating?: number }) {
   )
 }
 
-function PlanCardItem({ plan, isBest, annualTotal, inCompare, onToggleCompare }: {
+function PlanCardItem({
+  plan,
+  isBest,
+  matchingEstimate,
+  isInCompareList,
+  onToggleCompare,
+}: {
   plan: PlanCard
   isBest: boolean
-  annualTotal?: { low: number; high: number }
-  inCompare?: boolean
-  onToggleCompare?: (planId: string) => void
+  matchingEstimate?: CostEstimate
+  isInCompareList: boolean
+  onToggleCompare?: (id: string) => void
 }) {
   const [expanded, setExpanded] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -151,9 +157,11 @@ function PlanCardItem({ plan, isBest, annualTotal, inCompare, onToggleCompare }:
             </p>
           )}
           <p className={`text-xs mt-0.5 ${isBest && !isCurrent ? 'text-brand-600' : 'text-gray-400'}`}>Monthly Premium</p>
-          {annualTotal && (
-            <p className="text-xs text-gray-400 mt-0.5">
-              Est. ${annualTotal.low.toLocaleString()}–${annualTotal.high.toLocaleString()}/year total
+          {matchingEstimate && (
+            <p className={`text-xs text-center mt-1 ${isBest ? 'text-brand-600' : 'text-gray-400'}`}>
+              Est. {matchingEstimate.estimatedAnnualTotal.low === matchingEstimate.estimatedAnnualTotal.high
+                ? `$${matchingEstimate.estimatedAnnualTotal.low.toLocaleString()}`
+                : `$${matchingEstimate.estimatedAnnualTotal.low.toLocaleString()}–$${matchingEstimate.estimatedAnnualTotal.high.toLocaleString()}`}/year total
             </p>
           )}
         </div>
@@ -290,17 +298,17 @@ function PlanCardItem({ plan, isBest, annualTotal, inCompare, onToggleCompare }:
           >
             <Bookmark className={`w-4 h-4 ${saved ? 'fill-brand-500' : ''}`} />
           </button>
-          {onToggleCompare && (
-            <button
-              onClick={() => onToggleCompare(plan.id)}
-              title={inCompare ? 'Remove from comparison' : 'Add to comparison'}
-              className={`p-2.5 rounded-xl border transition-all ${
-                inCompare ? 'border-brand-300 bg-brand-50 text-brand-600' : 'border-gray-200 text-gray-400 hover:border-gray-300'
-              }`}
-            >
-              <GitCompare className={`w-4 h-4 ${inCompare ? 'fill-brand-100' : ''}`} />
-            </button>
-          )}
+          <button
+            onClick={() => onToggleCompare?.(plan.id)}
+            className={`p-2.5 rounded-xl border transition-all ${
+              isInCompareList
+                ? 'border-blue-300 bg-blue-50 text-blue-600'
+                : 'border-gray-200 text-gray-400 hover:border-gray-300'
+            }`}
+            title={isInCompareList ? 'Remove from comparison' : 'Add to comparison'}
+          >
+            <GitCompare className="w-4 h-4" />
+          </button>
         </div>
       </div>
     </div>
@@ -337,19 +345,16 @@ export default function PlanCards({ plans, loading, estimates = [], compareList 
 
   return (
     <div className="space-y-4">
-      {plans.map(plan => {
-        const est = estimates.find(e => e.planType === plan.planType)
-        return (
-          <PlanCardItem
-            key={plan.id}
-            plan={plan}
-            isBest={plan.isPrimaryRecommendation === true}
-            annualTotal={est?.estimatedAnnualTotal}
-            inCompare={compareList.includes(plan.id)}
-            onToggleCompare={onToggleCompare}
-          />
-        )
-      })}
+      {plans.map((plan, i) => (
+        <PlanCardItem
+          key={plan.id}
+          plan={plan}
+          isBest={plan.isPrimaryRecommendation === true}
+          matchingEstimate={estimates.find(e => e.planType === plan.planType)}
+          isInCompareList={compareList.includes(plan.id)}
+          onToggleCompare={onToggleCompare}
+        />
+      ))}
     </div>
   )
 }

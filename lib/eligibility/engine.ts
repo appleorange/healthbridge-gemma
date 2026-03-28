@@ -270,15 +270,19 @@ export function calculateEligibility(profile: UserProfile): EligibilityResult {
     } else {
       ineligible.push('medicaid')
       const inExpansionState = ACA_EXPANSION_STATES.includes(profile.state)
+      const fplBase = { 1: 15650, 2: 21150, 3: 26650, 4: 32150, 5: 37650, 6: 43150, 7: 48650, 8: 54150 }
+      const baseFPL = fplBase[Math.min(profile.householdSize, 8) as keyof typeof fplBase] ?? 54150
+      const medicaidIncomeLimit = Math.round(baseFPL * medicaidIncomeThreshold / 100)
+      const incomeGap = Math.round(profile.annualIncome - medicaidIncomeLimit)
       addNode({
         id: 'medicaid_result',
         label: 'Medicaid',
-        subtitle: `Income too high — ${Math.round(fplPct)}% FPL`,
+        subtitle: `${Math.round(fplPct)}% FPL — limit is ${medicaidIncomeThreshold}%`,
         type: 'result',
         status: 'ineligible',
         explanation: `Your income (${Math.round(fplPct)}% FPL) exceeds the Medicaid limit of ${medicaidIncomeThreshold}% FPL in ${profile.state}${inExpansionState ? ' (an expansion state)' : ' (a non-expansion state)'}.`,
         legalBasis: '42 USC § 1396a; 42 CFR § 435.119',
-        whatWouldChange: `Your income would need to fall below ${medicaidIncomeThreshold}% FPL ($${Math.round((medicaidIncomeThreshold / 100) * (fplPct > 0 ? profile.annualIncome / (fplPct / 100) : 15060)).toLocaleString()}/yr) to qualify in ${profile.state}.${!inExpansionState ? ' Moving to a Medicaid expansion state raises the threshold to 138% FPL.' : ''}`,
+        whatWouldChange: `Your income ($${profile.annualIncome.toLocaleString()}/yr) is $${incomeGap.toLocaleString()} above the ${medicaidIncomeThreshold}% FPL limit of $${medicaidIncomeLimit.toLocaleString()}/yr for a household of ${profile.householdSize} in ${profile.state}.${!ACA_EXPANSION_STATES.includes(profile.state) ? ' Moving to a Medicaid expansion state would raise the threshold to 138% FPL.' : ''}`,
         profileData: `Income $${profile.annualIncome.toLocaleString()} = ${Math.round(fplPct)}% FPL → exceeds ${medicaidIncomeThreshold}% threshold`,
       }, 'start', 'Medicaid check')
     }
@@ -339,12 +343,14 @@ export function calculateEligibility(profile: UserProfile): EligibilityResult {
   }
 
   // ── School / ISP — only for actual students or student visas ──
-  const isStudentContext = profile.isStudent ||
-    ['f1_student', 'f1_opt', 'j1_scholar', 'j2'].includes(profile.immigrationStatus)
+  const isInternationalStudentVisa = ['f1_student', 'f1_opt', 'j1_scholar', 'j2'].includes(profile.immigrationStatus)
+  const isStudentContext = isInternationalStudentVisa || (
+    profile.isStudent === true &&
+    !['us_citizen', 'green_card', 'refugee_asylee', 'daca'].includes(profile.immigrationStatus)
+  )
 
   if (isStudentContext) {
     eligible.push('school_plan')
-    eligible.push('international_student_plan')
 
     addNode({
       id: 'school_plan',
@@ -356,15 +362,18 @@ export function calculateEligibility(profile: UserProfile): EligibilityResult {
       profileData: `Student status: ${profile.immigrationStatus}${profile.university ? ` at ${profile.university}` : ''}`,
     }, 'start', 'Student')
 
-    addNode({
-      id: 'isp',
-      label: 'International student plan (ISP)',
-      subtitle: 'Private plan, may satisfy waiver',
-      type: 'result',
-      status: 'eligible',
-      explanation: 'International Student Plans (ISPs) are private health plans designed for international students. They often cost less than school plans and can satisfy waiver requirements. Compare carefully — networks and coverage levels vary.',
-      profileData: `Student visa / enrollment status → ISP eligible`,
-    }, 'start', 'Student alt.')
+    if (isInternationalStudentVisa) {
+      eligible.push('international_student_plan')
+      addNode({
+        id: 'isp',
+        label: 'International student plan (ISP)',
+        subtitle: 'Private plan, may satisfy waiver',
+        type: 'result',
+        status: 'eligible',
+        explanation: 'International Student Plans (ISPs) are private health plans designed for international students. They often cost less than school plans and can satisfy waiver requirements.',
+        profileData: `Visa: ${formatStatus(profile.immigrationStatus)} → ISP eligible`,
+      }, 'start', 'Student alt.')
+    }
 
     if (profile.immigrationStatus === 'j1_scholar') {
       circumstances.push('J-1 federal mandate: you are legally required to carry health insurance meeting specific minimums (22 CFR 62.14). Verify any plan meets these requirements.')
@@ -475,7 +484,9 @@ export function calculateEligibility(profile: UserProfile): EligibilityResult {
   }
 
   // ── Dependent: add parent_plan to eligible so it appears in cost estimates ──
-  if (profile.employmentStatus === 'dependent') {
+  const isOnParentPlan = profile.currentPlanType === 'parent_employer'
+
+  if (isOnParentPlan) {
     eligible.push('parent_plan')
     const insurer = profile.parentPlanInsurer ?? "parent/spouse's"
     const typeLabel = profile.parentPlanType && profile.parentPlanType !== 'unknown'
@@ -514,7 +525,7 @@ export function calculateEligibility(profile: UserProfile): EligibilityResult {
   }
 
   // ── Dependent: evaluate parent plan vs alternatives ──
-  if (profile.employmentStatus === 'dependent') {
+  if (isOnParentPlan) {
     const parentRec = evaluateParentPlan(profile, fplPct)
     const insurer = profile.parentPlanInsurer ?? "parent/spouse's"
     const typeLabel = profile.parentPlanType && profile.parentPlanType !== 'unknown'

@@ -98,7 +98,7 @@ export default function DocumentHub({ userProfile, documents, onDocumentsChange,
           })
         }
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to parse document.')
+        setError(e instanceof Error ? e.message : 'Upload failed. Please try again.')
       } finally {
         setUploading(false)
       }
@@ -465,10 +465,11 @@ function fileToBase64(file: File): Promise<string> {
     const reader = new FileReader()
     reader.onload = () => {
       const result = reader.result as string
-      // Strip the data URL prefix (e.g. "data:application/pdf;base64,")
-      resolve(result.split(',')[1])
+      // Strip the data URL prefix: "data:mime/type;base64,"
+      const base64 = result.includes(',') ? result.split(',')[1] : result
+      resolve(base64)
     }
-    reader.onerror = reject
+    reader.onerror = () => reject(new Error('Failed to read file'))
     reader.readAsDataURL(file)
   })
 }

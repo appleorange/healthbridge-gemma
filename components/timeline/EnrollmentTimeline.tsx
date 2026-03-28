@@ -39,7 +39,7 @@ function generateEvents(profile: UserProfile, eligibilityResult: EligibilityResu
       title: 'ACA Open Enrollment',
       description: isAcaRecommended
         ? `The AI recommends an ACA marketplace plan — this enrollment window is your primary action item. ${inOE ? 'You are currently in Open Enrollment — act now.' : oeUpcoming ? `Starts November 1, ${year}.` : `Next window opens November 1, ${year}.`}`
-        : `Annual window to enroll in or switch ACA marketplace plans. Covers plans starting January 1. ${inOE ? 'You are currently in Open Enrollment — act now.' : oeUpcoming ? `Starts November 1, ${year}.` : `Next window opens November 1, ${year}.`}`,
+        : `ACA marketplace is an eligible backup option for you. The AI recommends ${PLAN_READABLE[primary] ?? primary} as your primary plan. ${inOE ? 'Open Enrollment is currently active.' : oeUpcoming ? `Next Open Enrollment starts November 1, ${year}.` : `Next window opens November 1, ${year}.`}`,
       date: `${year}-11-01`,
       endDate: `${year + 1}-01-15`,
       type: 'open_enrollment',
@@ -71,28 +71,48 @@ function generateEvents(profile: UserProfile, eligibilityResult: EligibilityResu
     })
   }
 
-  // --- SEP Triggers --- (only relevant if ACA marketplace is in eligible plans)
+  // --- SEP Triggers ---
   const isUnemployed = profile.employmentStatus === 'unemployed_seeking' || profile.employmentStatus === 'unemployed_not_seeking'
-  if (eligible.includes('aca_marketplace')) {
+
+  // SEP: Job loss — only show if user is actually unemployed or recently lost coverage
+  if (isUnemployed || profile.formerEmployerInsurance === true) {
+    const daysLeft = profile.unemployedMonths
+      ? Math.max(0, 60 - (profile.unemployedMonths * 30))
+      : null
     events.push({
       id: 'sep_job_loss',
-      title: 'SEP: Job loss or loss of coverage',
-      description: 'Losing employer-sponsored insurance is a qualifying life event. You have 60 days from losing coverage to enroll in an ACA marketplace plan — even outside Open Enrollment.',
+      title: 'Special Enrollment Period — loss of coverage',
+      description: daysLeft !== null
+        ? `You lost employer coverage. You have approximately ${daysLeft} days left to enroll in an ACA marketplace plan without waiting for Open Enrollment. Do not miss this window.`
+        : 'Losing employer-sponsored insurance is a qualifying life event. You have 60 days from losing coverage to enroll in a new plan.',
       date: todayStr,
       type: 'sep',
-      status: isUnemployed ? 'action_required' : 'upcoming',
-      urgent: isUnemployed,
-      actionLabel: 'Learn about SEPs',
+      status: daysLeft !== null && daysLeft < 30 ? 'action_required' : 'active',
+      urgent: daysLeft !== null && daysLeft < 30,
+      actionLabel: 'Enroll now',
       actionUrl: 'https://www.healthcare.gov/coverage-outside-open-enrollment/special-enrollment-period/',
     })
+  }
 
+  // SEP: Marriage/birth/moving — only show if user is stable and has ACA eligibility
+  // Do NOT show for unemployed users (they already have a SEP from job loss)
+  // Do NOT show for dependents (not relevant)
+  // Only show if it adds value — i.e. they are currently insured and ACA is eligible
+  if (
+    eligible.includes('aca_marketplace') &&
+    !isUnemployed &&
+    profile.currentPlanType !== 'parent_employer' &&
+    profile.currentPlanType !== 'spouse_employer' &&
+    profile.currentlyInsured
+  ) {
     events.push({
       id: 'sep_other',
-      title: 'SEP: Marriage, birth, or moving',
-      description: 'Getting married, having a baby, or moving to a new state or ZIP code all trigger a 60-day Special Enrollment Period. You can enroll in or change your marketplace plan within that window.',
+      title: 'SEP: Marriage, new baby, or moving states',
+      description: 'Getting married, having a baby, or moving to a new state trigger a 60-day Special Enrollment Period. You can enroll in or change your marketplace plan within that window.',
       date: todayStr,
       type: 'sep',
       status: 'upcoming',
+      urgent: false,
     })
   }
 
@@ -251,8 +271,7 @@ function generateEvents(profile: UserProfile, eligibilityResult: EligibilityResu
 
   // --- Aging off parent plan ---
   if (
-    profile.employmentStatus === 'dependent' &&
-    profile.dependentOnWhom === 'parent' &&
+    profile.currentPlanType === 'parent_employer' &&
     profile.agingOffDate &&
     profile.agingOffDate !== 'over_2_years' &&
     profile.agingOffDate !== 'unknown'
@@ -312,6 +331,21 @@ function generateEvents(profile: UserProfile, eligibilityResult: EligibilityResu
       urgent: false,
     })
   }
+
+  // Boost urgency of events related to the primary recommendation
+  events.forEach(event => {
+    const isPrimaryRelated =
+      (primary === 'aca_marketplace' && (event.id === 'oe' || event.id.startsWith('sep'))) ||
+      (primary === 'medicaid' && event.id === 'medicaid_year_round') ||
+      (primary === 'employer_sponsored' && event.id === 'employer_oe') ||
+      (primary === 'school_plan' && event.id.startsWith('school_')) ||
+      (primary === 'parent_plan' && event.id === 'aging_off') ||
+      (primary === 'cobra' && event.id === 'cobra_election')
+
+    if (isPrimaryRelated && event.status === 'upcoming') {
+      event.status = 'active'
+    }
+  })
 
   return sortEvents(events)
 }

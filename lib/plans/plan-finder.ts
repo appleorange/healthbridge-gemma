@@ -334,6 +334,8 @@ export function evaluateCurrentPlan(profile: UserProfile): { score: number; isOp
 
 const CURRENT_PLAN_TYPE_MAP: Record<string, PlanType> = {
   employer:                'employer_sponsored',
+  parent_employer:         'parent_plan',
+  spouse_employer:         'parent_plan',
   aca_marketplace:         'aca_marketplace',
   school_plan:             'school_plan',
   isp:                     'international_student_plan',

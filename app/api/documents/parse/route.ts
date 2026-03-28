@@ -86,7 +86,8 @@ export async function POST(req: Request) {
       ...parsed,
     })
   } catch (error) {
-    console.error('Document parse error:', error)
-    return Response.json({ error: 'Failed to parse document. Please try again.' }, { status: 500 })
+    const errMsg = error instanceof Error ? error.message : String(error)
+    console.error('Document parse error:', errMsg)
+    return Response.json({ error: errMsg }, { status: 500 })
   }
 }
