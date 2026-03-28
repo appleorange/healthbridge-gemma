@@ -3,17 +3,22 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 @theme {
-  --color-brand-50: #eef7f4;
-  --color-brand-100: #d4ece4;
-  --color-brand-200: #a8d8c8;
-  --color-brand-300: #70c0a7;
-  --color-brand-400: #3da484;
-  --color-brand-500: #1e8a6a;
-  --color-brand-600: #156f54;
-  --color-brand-700: #105843;
-  --color-brand-800: #0c4434;
-  --color-brand-900: #082e23;
+  --color-brand-50:  #f4f6f0;
+  --color-brand-100: #dad7cd;
+  --color-brand-200: #c2c9b5;
+  --color-brand-300: #a3b18a;
+  --color-brand-400: #7a9466;
+  --color-brand-500: #588157;
+  --color-brand-600: #3a5a40;
+  --color-brand-700: #344e41;
+  --color-brand-800: #2a3d33;
+  --color-brand-900: #1a2820;
   --font-sans: 'Inter', system-ui, sans-serif;
+}
+
+@keyframes marquee {
+  0%   { transform: translateX(0%); }
+  100% { transform: translateX(-100%); }
 }
 
 * {
@@ -22,6 +27,7 @@
 
 body {
   font-family: var(--font-sans);
+  background-color: #eeeee8;
 }
 
 @layer components {
