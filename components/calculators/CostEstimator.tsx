@@ -3,6 +3,7 @@ import { useState, useMemo } from 'react'
 import { TrendingDown, Info, ChevronRight, Sparkles, FileText } from 'lucide-react'
 import { estimateCosts, calculateSubsidy } from '@/lib/calculators/cost-estimator'
 import type { UserProfile, PlanType, CostEstimate, ParsedDocument } from '@/types'
+import CountUp from '@/components/ui/CountUp'
 
 function formatRange(low: number, high: number, prefix = '$', suffix = ''): string {
   if (low === high) return `${prefix}${low.toLocaleString()}${suffix}`
@@ -252,7 +253,11 @@ export default function CostEstimator({ profile, eligiblePlans, primaryRecommend
             {/* Total */}
             <ReceiptLine
               label="ESTIMATED ANNUAL TOTAL"
-              value={formatRange(primaryEst.estimatedAnnualTotal.low, primaryEst.estimatedAnnualTotal.high)}
+              value={
+                primaryEst.estimatedAnnualTotal.low === primaryEst.estimatedAnnualTotal.high
+                  ? `$${primaryEst.estimatedAnnualTotal.low.toLocaleString()}`
+                  : formatRange(primaryEst.estimatedAnnualTotal.low, primaryEst.estimatedAnnualTotal.high)
+              }
               bold
               divider
             />
@@ -353,7 +358,9 @@ export default function CostEstimator({ profile, eligiblePlans, primaryRecommend
           </div>
 
           <div className="bg-white rounded-xl p-3 border border-green-100 text-center">
-            <p className="text-3xl font-bold text-green-700 tabular-nums">{subsidy.fplPercentage}%</p>
+            <p className="text-3xl font-bold text-green-700 tabular-nums">
+              <CountUp to={subsidy.fplPercentage} suffix="%" duration={1} />
+            </p>
             <p className="text-xs text-green-600 mt-0.5">of the federal poverty level</p>
           </div>
 

@@ -2,8 +2,10 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Shield, ChevronRight, ChevronLeft } from 'lucide-react'
+import { motion } from 'framer-motion'
 import { ONBOARDING_STEPS, US_STATES } from '@/lib/eligibility/onboarding-steps'
 import type { UserProfile } from '@/types'
+import StepTransition from '@/components/ui/StepTransition'
 
 export default function OnboardingPage() {
   const router = useRouter()
@@ -18,6 +20,7 @@ export default function OnboardingPage() {
     hasDependents: false,
   })
   const [loading, setLoading] = useState(false)
+  const [direction, setDirection] = useState<'forward' | 'backward'>('forward')
 
   const step = ONBOARDING_STEPS[currentStep]
   const isLast = currentStep === ONBOARDING_STEPS.length - 1
@@ -60,6 +63,7 @@ export default function OnboardingPage() {
   }
 
   async function handleNext() {
+    setDirection('forward')
     if (isLast) {
       setLoading(true)
       try {
@@ -84,11 +88,10 @@ export default function OnboardingPage() {
   }
 
   function handleBack() {
+    setDirection('backward')
     if (currentStep === 0) router.push('/')
     else setCurrentStep(s => s - 1)
   }
-
-  const progress = ((currentStep + 1) / ONBOARDING_STEPS.length) * 100
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -100,17 +103,53 @@ export default function OnboardingPage() {
         <span className="font-semibold text-gray-900">HealthBridge</span>
       </div>
 
-      {/* Progress bar */}
-      <div className="h-1 bg-gray-100">
-        <div
-          className="h-1 bg-brand-500 transition-all duration-500"
-          style={{ width: `${progress}%` }}
-        />
+      {/* Animated stepper */}
+      <div className="bg-white border-b border-gray-100 px-6 py-3">
+        <div className="flex items-center gap-2 max-w-lg mx-auto">
+          {ONBOARDING_STEPS.map((s, i) => {
+            const isCompleted = i < currentStep
+            const isCurrent = i === currentStep
+            return (
+              <div key={s.id} className="flex items-center gap-2 flex-1">
+                <motion.div
+                  animate={{
+                    scale: isCurrent ? 1.15 : 1,
+                    backgroundColor: isCompleted ? '#588157' : isCurrent ? '#3a5a40' : '#dad7cd',
+                  }}
+                  transition={{ duration: 0.2 }}
+                  className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0"
+                >
+                  {isCompleted ? (
+                    <motion.svg
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      width="12" height="12" viewBox="0 0 12 12" fill="none"
+                    >
+                      <path d="M2 6l3 3 5-5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </motion.svg>
+                  ) : (
+                    <span className={`text-xs font-bold ${isCurrent ? 'text-white' : 'text-brand-400'}`}>
+                      {i + 1}
+                    </span>
+                  )}
+                </motion.div>
+                {i < ONBOARDING_STEPS.length - 1 && (
+                  <motion.div
+                    className="h-0.5 flex-1 rounded-full"
+                    animate={{ backgroundColor: isCompleted ? '#588157' : '#dad7cd' }}
+                    transition={{ duration: 0.3 }}
+                  />
+                )}
+              </div>
+            )
+          })}
+        </div>
       </div>
 
       {/* Step content */}
       <div className="flex-1 flex items-start justify-center px-6 py-12">
         <div className="w-full max-w-lg">
+          <StepTransition stepKey={currentStep} direction={direction}>
           {/* Step counter */}
           <p className="text-sm text-gray-400 mb-2">
             Step {currentStep + 1} of {ONBOARDING_STEPS.length}
@@ -233,6 +272,8 @@ export default function OnboardingPage() {
               </div>
             ))}
           </div>
+
+          </StepTransition>
 
           {/* Navigation */}
           <div className="flex gap-3 mt-10">

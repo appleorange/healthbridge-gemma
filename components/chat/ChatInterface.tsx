@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Send, Bot, User, Trash2 } from 'lucide-react'
 import type { UserProfile, ChatMessage } from '@/types'
+import Typewriter from '@/components/ui/Typewriter'
 
 interface Props {
   userProfile: UserProfile
@@ -181,7 +182,11 @@ export default function ChatInterface({ userProfile, autoSendPrompt, onAutoPromp
                 ? 'bg-white border border-gray-100 text-gray-800'
                 : 'bg-brand-600 text-white'
             }`}>
-              {msg.content || (
+              {msg.id === '0' && msg.role === 'assistant' ? (
+                <Typewriter text={msg.content} speed={14} delay={400} className="text-sm leading-relaxed text-gray-700" />
+              ) : msg.content ? (
+                msg.content
+              ) : (
                 <span className="flex gap-1 items-center text-gray-400">
                   <span className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-bounce" style={{animationDelay:'0ms'}}/>
                   <span className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-bounce" style={{animationDelay:'150ms'}}/>

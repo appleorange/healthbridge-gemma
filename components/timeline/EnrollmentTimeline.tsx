@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { Calendar, AlertCircle, Clock, CheckCircle, Info, Sparkles } from 'lucide-react'
 import type { UserProfile, EligibilityResult, TimelineEvent } from '@/types'
+import AnimatedList from '@/components/ui/AnimatedList'
 
 const PLAN_READABLE: Partial<Record<string, string>> = {
   aca_marketplace: 'ACA marketplace plan',
@@ -479,7 +480,7 @@ export default function EnrollmentTimeline({ profile, eligibilityResult, docDead
         {/* Vertical line */}
         <div className="absolute left-5 top-2 bottom-2 w-0.5 bg-gray-100" />
 
-        <div className="space-y-4">
+        <AnimatedList staggerDelay={0.07} className="space-y-4">
           {events.map(event => {
             const cfg = TYPE_CONFIG[event.type] || TYPE_CONFIG.action
             const Icon = cfg.icon
@@ -547,7 +548,7 @@ export default function EnrollmentTimeline({ profile, eligibilityResult, docDead
               </div>
             )
           })}
-        </div>
+        </AnimatedList>
       </div>
     </div>
   )

@@ -1,7 +1,9 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { motion, useInView } from 'framer-motion'
 import { ExternalLink, Star, Bookmark, GitCompare, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, Pill, Stethoscope } from 'lucide-react'
 import type { PlanCard, CostEstimate } from '@/types'
+import AnimatedProgressBar from '@/components/ui/AnimatedProgressBar'
 
 interface Props {
   plans: PlanCard[]
@@ -33,21 +35,38 @@ const METAL_COLORS: Record<string, string> = {
 function FitScoreRing({ score }: { score: number }) {
   const radius = 22
   const circ = 2 * Math.PI * radius
-  const filled = (score / 100) * circ
   const color = score >= 80 ? '#16a34a' : score >= 60 ? '#d97706' : '#dc2626'
+  const ref = useRef<HTMLDivElement>(null)
+  const isInView = useInView(ref, { once: true })
+  const [displayScore, setDisplayScore] = useState(0)
+  const [filledLength, setFilledLength] = useState(0)
+
+  useEffect(() => {
+    if (!isInView) return
+    let start: number | null = null
+    function animate(ts: number) {
+      if (!start) start = ts
+      const p = Math.min((ts - start) / 1000, 1)
+      const eased = 1 - Math.pow(1 - p, 3)
+      setDisplayScore(Math.round(eased * score))
+      setFilledLength((eased * score / 100) * circ)
+      if (p < 1) requestAnimationFrame(animate)
+    }
+    requestAnimationFrame(animate)
+  }, [isInView, score, circ])
 
   return (
-    <div className="flex flex-col items-center gap-0.5">
+    <div ref={ref} className="flex flex-col items-center gap-0.5">
       <svg width="60" height="60" viewBox="0 0 60 60">
         <circle cx="30" cy="30" r={radius} fill="none" stroke="#e5e7eb" strokeWidth="5" />
         <circle
           cx="30" cy="30" r={radius} fill="none"
           stroke={color} strokeWidth="5"
-          strokeDasharray={`${filled} ${circ}`}
+          strokeDasharray={`${filledLength} ${circ}`}
           strokeLinecap="round"
           transform="rotate(-90 30 30)"
         />
-        <text x="30" y="35" textAnchor="middle" fontSize="14" fontWeight="600" fill={color}>{score}</text>
+        <text x="30" y="35" textAnchor="middle" fontSize="14" fontWeight="600" fill={color}>{displayScore}</text>
       </svg>
       <span className="text-xs text-gray-400">Fit score</span>
     </div>
@@ -91,7 +110,7 @@ function PlanCardItem({
   const premium = plan.subsidizedPremium ?? plan.monthlyPremium
   const subsidized = plan.subsidizedPremium !== undefined && plan.subsidizedPremium < plan.monthlyPremium
 
-  return (
+  const cardContent = (
     <div className={`rounded-2xl border overflow-hidden transition-all ${
       isConsiderSwitching ? 'border-amber-300 shadow-sm'
       : isOnRecommendedType ? 'border-green-400 shadow-sm'
@@ -234,6 +253,16 @@ function PlanCardItem({
           </div>
         )}
 
+        {/* Fit score bar */}
+        <AnimatedProgressBar
+          value={plan.fitScore}
+          max={100}
+          color={isBest ? '#3a5a40' : '#588157'}
+          bgColor={isBest ? '#a3b18a33' : '#dad7cd'}
+          height={5}
+          className="mt-1 mb-3"
+        />
+
         {/* Short-term warning */}
         {plan.planType === 'short_term' && (
           <div className="flex gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl mb-3">
@@ -313,6 +342,26 @@ function PlanCardItem({
       </div>
     </div>
   )
+
+  if (isBest && !isCurrent) {
+    return (
+      <motion.div
+        animate={{
+          boxShadow: [
+            '0 0 0 1px #588157',
+            '0 0 12px 2px #58815740',
+            '0 0 0 1px #588157',
+          ],
+        }}
+        transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+        className="rounded-2xl overflow-hidden"
+      >
+        {cardContent}
+      </motion.div>
+    )
+  }
+
+  return cardContent
 }
 
 export default function PlanCards({ plans, loading, estimates = [], compareList = [], onToggleCompare }: Props) {
