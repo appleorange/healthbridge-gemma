@@ -1,5 +1,5 @@
 'use client'
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { Shield, GitBranch, FileText, Clock, ChevronRight, CheckCircle, ArrowRight, Scale, Search } from 'lucide-react'
@@ -111,8 +111,25 @@ function FaqItem({ q, a }: { q: string; a: string }) {
 }
 
 export default function HomePage() {
+  const [mousePos, setMousePos] = useState({ x: -9999, y: -9999 })
+
+  useEffect(() => {
+    function handleMouseMove(e: MouseEvent) {
+      setMousePos({ x: e.clientX, y: e.clientY })
+    }
+    window.addEventListener('mousemove', handleMouseMove)
+    return () => window.removeEventListener('mousemove', handleMouseMove)
+  }, [])
+
   return (
-    <div className="min-h-screen text-gray-900" style={{ background: '#eeeee8' }}>
+    <div className="min-h-screen text-gray-900 relative" style={{ background: '#eeeee8' }}>
+      <div
+        className="fixed inset-0 pointer-events-none z-0"
+        style={{
+          background: `radial-gradient(200px circle at ${mousePos.x}px ${mousePos.y}px, rgba(88, 129, 87, 0.12) 0%, transparent 80%)`,
+          transition: 'none',
+        }}
+      />
 
       {/* ── Nav ── */}
       <nav className="sticky top-0 z-50 bg-[#f8f7f4]/90 backdrop-blur-sm border-b border-brand-200 px-6 py-4 flex items-center justify-between">

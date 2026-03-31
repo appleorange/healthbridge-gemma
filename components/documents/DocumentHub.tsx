@@ -16,6 +16,8 @@ const DOC_TYPE_LABELS: Record<string, string> = {
 
 const ACCEPTED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp']
 const MAX_MB = 10
+const DOC_LIMIT = 3
+const docCountKey = 'hb_doc_count'
 
 interface DenialSignal {
   planName: string
@@ -55,6 +57,13 @@ export default function DocumentHub({ userProfile, documents, onDocumentsChange,
         setError(`${file.name} is too large (max ${MAX_MB}MB).`)
         continue
       }
+
+      const docCount = parseInt(sessionStorage.getItem(docCountKey) ?? '0')
+      if (docCount >= DOC_LIMIT) {
+        setError("You've reached the document limit for this session. Start a new session to continue.")
+        break
+      }
+      sessionStorage.setItem(docCountKey, String(docCount + 1))
 
       setUploading(true)
       try {

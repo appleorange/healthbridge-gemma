@@ -20,6 +20,8 @@ const SUGGESTED_QUESTIONS = [
 ]
 
 const STORAGE_KEY = 'hb_chat_messages'
+const MESSAGE_LIMIT = 20
+const countKey = 'hb_message_count'
 
 function makeWelcome(userProfile: UserProfile): ChatMessage {
   return {
@@ -46,6 +48,9 @@ export default function ChatInterface({ userProfile, autoSendPrompt, onAutoPromp
     return [makeWelcome(userProfile)]
   })
 
+  const [messageCount, setMessageCount] = useState(() =>
+    typeof window !== 'undefined' ? parseInt(sessionStorage.getItem(countKey) ?? '0') : 0
+  )
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -83,6 +88,19 @@ export default function ChatInterface({ userProfile, autoSendPrompt, onAutoPromp
   async function sendMessage(text?: string) {
     const content = text || input.trim()
     if (!content || streaming) return
+
+    const count = parseInt(sessionStorage.getItem(countKey) ?? '0')
+    if (count >= MESSAGE_LIMIT) {
+      setMessages(prev => [...prev, {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: "You've reached the message limit for this session. Start a new session to continue.",
+        timestamp: new Date(),
+      }])
+      return
+    }
+    sessionStorage.setItem(countKey, String(count + 1))
+    setMessageCount(count + 1)
 
     const userMsg: ChatMessage = {
       id: Date.now().toString(),
@@ -235,6 +253,9 @@ export default function ChatInterface({ userProfile, autoSendPrompt, onAutoPromp
             <Send className="w-4 h-4" />
           </button>
         </div>
+        <p className="text-xs text-gray-400 text-right mt-1">
+          {MESSAGE_LIMIT - messageCount} messages remaining this session
+        </p>
       </div>
     </div>
   )

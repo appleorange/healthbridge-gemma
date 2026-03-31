@@ -27,6 +27,9 @@ interface AnalysisResult {
   keyArguments: string[]
 }
 
+const APPEAL_LIMIT = 2
+const appealCountKey = 'hb_appeal_count'
+
 const EMPTY_DENIAL: DenialInfo = {
   planName: '',
   denialReason: '',
@@ -75,6 +78,13 @@ export default function AppealAssistant({ userProfile, eligibilityResult }: Prop
   }, [userProfile, eligibilityResult])
 
   async function analyzeAppeal() {
+    const appealCount = parseInt(sessionStorage.getItem(appealCountKey) ?? '0')
+    if (appealCount >= APPEAL_LIMIT) {
+      setError("You've reached the appeal limit for this session. Start a new session to continue.")
+      return
+    }
+    sessionStorage.setItem(appealCountKey, String(appealCount + 1))
+
     setLoading(true)
     setError(null)
     try {
