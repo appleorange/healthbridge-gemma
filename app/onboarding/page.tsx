@@ -6,6 +6,7 @@ import { motion } from 'framer-motion'
 import { ONBOARDING_STEPS, US_STATES } from '@/lib/eligibility/onboarding-steps'
 import type { UserProfile } from '@/types'
 import StepTransition from '@/components/ui/StepTransition'
+import { AnimatedField } from '@/components/onboarding/AnimatedField'
 
 export default function OnboardingPage() {
   const router = useRouter()
@@ -160,8 +161,9 @@ export default function OnboardingPage() {
 
           {/* Fields */}
           <div className="space-y-6">
-            {deduplicatedFields.map(field => (
-              <div key={field.id + (field.showWhen ? JSON.stringify(field.showWhen) : '')}>
+            {deduplicatedFields.map((field, index) => (
+              <AnimatedField key={field.id + (field.showWhen ? JSON.stringify(field.showWhen) : '')} index={index}>
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   {field.label}
                   {!field.required && <span className="text-gray-400 font-normal ml-1">(optional)</span>}
@@ -270,6 +272,7 @@ export default function OnboardingPage() {
                   <p className="text-xs text-gray-400 mt-2">{field.helpText}</p>
                 )}
               </div>
+              </AnimatedField>
             ))}
           </div>
 
