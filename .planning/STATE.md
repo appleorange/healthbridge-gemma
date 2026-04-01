@@ -9,10 +9,10 @@ See: `.planning/PROJECT.md` (updated 2026-03-31)
 
 ## Current Position
 
-Phase: Not started (research in progress)
-Plan: —
-Status: Research phase — 3/4 agents complete, awaiting PITFALLS.md
-Last activity: 2026-03-31 — Parallel research agents running
+Phase: Ready to implement — Phase 1: Foundation
+Plan: `.planning/ROADMAP.md`
+Status: Research complete (4/4). Requirements + Roadmap written. Ready to build.
+Last activity: 2026-03-31 — Requirements defined, roadmap created
 
 ## Accumulated Context
 
@@ -22,3 +22,5 @@ Last activity: 2026-03-31 — Parallel research agents running
 - User wants: landing page overhaul + dashboard sidebar + better onboarding + visual identity
 - Dashboard recommendation: sidebar nav + home overview screen (scales better than tabs)
 - No tests, no CI — iterating fast
+- 20 requirements across 4 phases (REQ-001 → REQ-020)
+- PITFALLS.md written — key gotchas: Lenis iOS/memory/route-reset, SSR hydration, `h-[100dvh]`, `React.memo` on sidebar
