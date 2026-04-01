@@ -84,6 +84,7 @@ export interface UserProfile {
   // ACA subsidy specific
   filingStatus?: 'single' | 'married_joint' | 'married_separate' | 'head_of_household'
   receivingUnemploymentBenefits?: boolean
+  unemployedMonths?: number
 
   // Location for plan lookup
   zipCode?: string

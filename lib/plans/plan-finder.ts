@@ -9,7 +9,7 @@ function calcFitScore(plan: Omit<PlanCard, 'fitScore' | 'fitReasons'>, profile: 
 
   // Premium budget check
   const effectivePremium = plan.subsidizedPremium ?? plan.monthlyPremium
-  const budget = profile.monthlyPremiumBudget as string
+  const budget = profile.monthlyPremiumBudget as unknown as string
   if (budget && budget !== 'flexible') {
     const cap = budget === 'under_100' ? 100 : budget === '100_to_300' ? 300 : budget === '300_to_500' ? 500 : 9999
     if (effectivePremium <= cap) { score += 10; reasons.push(`$${effectivePremium}/mo premium fits your budget`) }

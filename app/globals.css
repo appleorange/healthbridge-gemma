@@ -14,6 +14,29 @@
   --color-brand-800: #2a3d33;
   --color-brand-900: #1a2820;
   --font-sans: 'Inter', system-ui, sans-serif;
+
+  /* Surface & border tokens */
+  --color-surface: #f8f7f4;
+  --color-surface-raised: #ffffff;
+  --color-surface-overlay: #eeeee8;
+  --color-border: rgb(0 0 0 / 0.08);
+
+  /* Radius scale */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+
+  /* Shadow scale */
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.05);
+  --shadow-md: 0 1px 3px rgb(0 0 0 / 0.06), 0 1px 2px rgb(0 0 0 / 0.04);
+  --shadow-lg: 0 4px 6px rgb(0 0 0 / 0.07), 0 2px 4px rgb(0 0 0 / 0.05);
+
+  /* Motion tokens */
+  --duration-fast: 150ms;
+  --duration-base: 250ms;
+  --duration-slow: 400ms;
+  --ease-out-expo: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @keyframes marquee {
