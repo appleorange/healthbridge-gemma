@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { AppealAnalyzeRequestSchema } from '@/lib/validation/schemas'
 
 export const runtime = 'nodejs'
 
@@ -9,7 +10,12 @@ const client = new Anthropic({
 
 export async function POST(req: NextRequest) {
   try {
-    const { planName, denialReason, denialDate, serviceDescription, denialCode, planType, immigrationStatus, state } = await req.json()
+    const body = await req.json()
+    const parsed = AppealAnalyzeRequestSchema.safeParse(body)
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'Invalid request', details: parsed.error.issues }, { status: 400 })
+    }
+    const { planName, denialReason, denialDate, serviceDescription, denialCode, planType, immigrationStatus, state } = parsed.data
 
     const message = await client.messages.create({
       model: 'claude-sonnet-4-6',

@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
+import { NetworkCheckRequestSchema } from '@/lib/validation/schemas'
 
 export const runtime = 'nodejs'
 
@@ -33,14 +34,12 @@ const KNOWN_SYSTEMS: Record<string, string> = {
 
 export async function POST(req: Request) {
   try {
-    const { providerName, providerType, zipCode, planId, planName, planNetworkType } = await req.json() as {
-      providerName: string
-      providerType: 'doctor' | 'hospital' | 'any'
-      zipCode: string
-      planId?: string
-      planName?: string
-      planNetworkType?: string
+    const body = await req.json()
+    const parsed = NetworkCheckRequestSchema.safeParse(body)
+    if (!parsed.success) {
+      return Response.json({ error: 'Invalid request', details: parsed.error.issues }, { status: 400 })
     }
+    const { providerName, providerType, zipCode, planId, planName, planNetworkType } = parsed.data
 
     // ── Try CMS Provider Directory if planId is available ──
     if (planId) {

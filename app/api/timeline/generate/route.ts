@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
-import type { UserProfile, EligibilityResult, TimelineEvent } from '@/types'
+import type { TimelineEvent } from '@/types'
+import { TimelineRequestSchema } from '@/lib/validation/schemas'
 
 export const runtime = 'nodejs'
 
@@ -9,10 +10,12 @@ const client = new Anthropic({
 
 export async function POST(req: Request) {
   try {
-    const { profile, eligibilityResult } = await req.json() as {
-      profile: UserProfile
-      eligibilityResult: EligibilityResult
+    const body = await req.json()
+    const parsed = TimelineRequestSchema.safeParse(body)
+    if (!parsed.success) {
+      return Response.json({ events: [] })
     }
+    const { profile, eligibilityResult } = parsed.data
 
     const prompt = `Based on this user profile and eligibility result, generate 3-5 specific enrollment deadlines and action items as a JSON array. Each item needs: id, title, description, date (ISO string), type (one of: open_enrollment, sep, cobra, university, medicaid, action), status (one of: active, upcoming, ongoing, action_required, past), urgent (boolean). Make dates specific — if they go to Carnegie Mellon, the fall waiver deadline is typically August 31. If they work at Google, open enrollment is in November. Be specific about what action to take and why based on their recommended plan. Return only valid JSON, no other text.
 

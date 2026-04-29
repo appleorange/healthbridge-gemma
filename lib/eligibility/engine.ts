@@ -1,30 +1,17 @@
 import type { UserProfile, EligibilityResult, PlanType, FlowchartNode, FlowchartEdge, NextStep } from '@/types'
 import { estimateCosts } from '@/lib/calculators/cost-estimator'
 import { matchEmployerPlans } from '@/lib/plans/plan-finder'
-
-// States that have expanded Medicaid to cover specific immigrant groups
-const MEDICAID_EXPANSION_STATES = [
-  'CA', 'CO', 'CT', 'DC', 'IL', 'MA', 'MD', 'ME', 'MN', 'NJ', 'NY', 'OR', 'VT', 'WA'
-]
-
-const DACA_MEDICAID_STATES = ['CA', 'CO', 'IL', 'OR', 'WA', 'NY', 'CT', 'DC', 'MA', 'MD', 'MN']
-
-const ACA_EXPANSION_STATES = [
-  'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DC', 'DE', 'HI', 'ID', 'IL', 'IN', 'IA',
-  'KS', 'KY', 'LA', 'ME', 'MD', 'MA', 'MI', 'MN', 'MO', 'MT', 'NE', 'NV', 'NH',
-  'NJ', 'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SD', 'UT', 'VT',
-  'VA', 'WA', 'WV', 'WI'
-]
-
-// Federal poverty level thresholds (2024)
-function getFPLPercentage(annualIncome: number, householdSize: number): number {
-  const fplBase: Record<number, number> = {
-    1: 15060, 2: 20440, 3: 25820, 4: 31200,
-    5: 36580, 6: 41960, 7: 47340, 8: 52720
-  }
-  const fpl = fplBase[Math.min(householdSize, 8)] || 52720 + (householdSize - 8) * 5380
-  return (annualIncome / fpl) * 100
-}
+import { getFPLPercent, FPL_BASE } from '@/lib/constants/fpl'
+import {
+  MARKETPLACE_ACCESS_STATUSES,
+  APTC_ELIGIBLE_STATUSES,
+  FEDERAL_MEDICAID_STATUSES,
+  FIVE_YEAR_BAR_WAIVER_STATES,
+  DACA_STATE_MEDICAID_STATES,
+  DACA_STATE_EXCHANGE_STATES,
+  TPS_STATE_MEDICAID_STATES,
+  ACA_EXPANSION_STATES,
+} from './rules'
 
 function buildBestOptionReasoning(
   primary: PlanType,
@@ -35,6 +22,16 @@ function buildBestOptionReasoning(
   const parts: string[] = []
 
   switch (primary) {
+    case 'medicare':
+      parts.push('Medicare is your primary coverage — at 65+ it\'s the most comprehensive federal option available.')
+      parts.push('Part A (hospital) is free if you or your spouse paid Medicare taxes for 10+ years. Part B (medical) has a monthly premium (~$174/month in 2024).')
+      if (eligible.includes('medicaid')) {
+        parts.push('Since you also qualify for Medicaid, you may be "dual eligible" — Medicaid can cover your Medicare premiums and cost-sharing, making coverage nearly free.')
+      } else {
+        parts.push('Consider a Medigap supplemental plan or Medicare Advantage to cover gaps in Original Medicare, including prescription drugs (Part D).')
+      }
+      break
+
     case 'medicaid':
       parts.push('Medicaid is your strongest option — it\'s free or nearly free government coverage with comprehensive benefits.')
       if (profile.expectedHealthcareUsage === 'high') {
@@ -162,14 +159,12 @@ export function calculateEligibility(profile: UserProfile): EligibilityResult {
   const nextSteps: NextStep[] = []
   const nodes: FlowchartNode[] = []
   const edges: FlowchartEdge[] = []
-  const fplPct = getFPLPercentage(profile.annualIncome, profile.householdSize)
+  const fplPct = getFPLPercent(profile.annualIncome, profile.householdSize)
 
-  // ── Helper: add node and register edge from parent ──
   function addNode(node: FlowchartNode, parentId?: string, edgeLabel?: string) {
     nodes.push(node)
     if (parentId) {
       edges.push({ from: parentId, to: node.id, label: edgeLabel })
-      // Maintain children array on parent
       const parent = nodes.find(n => n.id === parentId)
       if (parent) {
         parent.children = [...(parent.children ?? []), node.id]
@@ -192,23 +187,34 @@ export function calculateEligibility(profile: UserProfile): EligibilityResult {
   nodes.push(startNode)
 
   // ── ACA / Marketplace eligibility ──
-  const acaEligibleStatuses = ['us_citizen', 'green_card', 'refugee_asylee', 'l1', 'o1', 'tn']
-  const acaEligible = acaEligibleStatuses.includes(profile.immigrationStatus)
+  // "Marketplace access" and "APTC eligibility" are separate questions — both require
+  // "lawfully present" status (45 CFR § 155.20), so the eligible sets are the same.
+  // The key distinction is that DACA/undocumented cannot access the marketplace at all,
+  // while all other non-immigrants (H-1B, F-1, J-1, etc.) can buy plans but may not
+  // get subsidies if they have employer coverage or are outside the income range.
+  //
+  // Exception: California extended Covered California to DACA as of January 1, 2023.
+  const acaMarketplaceAccess = MARKETPLACE_ACCESS_STATUSES.includes(profile.immigrationStatus)
+  const dacaStateExchange = profile.immigrationStatus === 'daca' && DACA_STATE_EXCHANGE_STATES.includes(profile.state)
+  const acaEligible = acaMarketplaceAccess || dacaStateExchange
+  const aptcStatusEligible = APTC_ELIGIBLE_STATUSES.includes(profile.immigrationStatus)
+  const subsidyEligible = aptcStatusEligible && fplPct >= 100 && fplPct <= 400 && !profile.hasEmployerInsurance
 
   if (acaEligible) {
     eligible.push('aca_marketplace')
-    const subsidyEligible = fplPct >= 100 && fplPct <= 400 && !profile.hasEmployerInsurance
-    const acaChildren: string[] = subsidyEligible ? ['subsidy'] : []
+    const stateExchangeOnly = dacaStateExchange && !acaMarketplaceAccess
     addNode({
       id: 'aca_result',
-      label: 'ACA marketplace',
-      subtitle: 'Healthcare.gov or state exchange',
+      label: stateExchangeOnly ? 'Covered California (state exchange)' : 'ACA marketplace',
+      subtitle: stateExchangeOnly ? 'coveredca.gov — not healthcare.gov' : 'Healthcare.gov or state exchange',
       type: 'result',
       status: 'eligible',
-      explanation: 'You can purchase a plan on the ACA marketplace. Open enrollment runs Nov 1 – Jan 15. You may qualify for a Premium Tax Credit based on your income.',
-      children: acaChildren,
+      explanation: stateExchangeOnly
+        ? 'California extended Covered California marketplace access to DACA recipients as of January 1, 2023. Enroll at coveredca.gov — the federal marketplace (healthcare.gov) does not apply. Federal APTC subsidies are not available, but California offers state-level premium assistance through Covered California.'
+        : 'You can purchase a plan on the ACA marketplace. Open enrollment runs Nov 1 – Jan 15. You may qualify for a Premium Tax Credit based on your income.',
+      children: subsidyEligible ? ['subsidy'] : [],
       profileData: `Status: ${formatStatus(profile.immigrationStatus)} → lawfully present`,
-    }, 'start', 'ACA eligible')
+    }, 'start', stateExchangeOnly ? 'CA state exchange' : 'ACA eligible')
 
     if (subsidyEligible) {
       circumstances.push(`You may qualify for a Premium Tax Credit — your income is approximately ${Math.round(fplPct)}% of the federal poverty level.`)
@@ -226,17 +232,17 @@ export function calculateEligibility(profile: UserProfile): EligibilityResult {
   } else {
     ineligible.push('aca_marketplace')
     const acaIneligibleReason = profile.immigrationStatus === 'undocumented'
-      ? 'Undocumented individuals are excluded from ACA marketplace plans and subsidies'
+      ? 'Undocumented individuals are excluded from ACA marketplace plans and subsidies under federal law'
       : profile.immigrationStatus === 'daca'
-      ? 'DACA recipients are explicitly excluded from ACA marketplace eligibility under federal rules'
-      : `${formatStatus(profile.immigrationStatus)} is a non-immigrant status that does not meet the "lawfully present" standard`
+      ? `DACA recipients are excluded from the federal ACA marketplace. In ${profile.state}, no state exchange alternative is currently available for DACA.`
+      : `${formatStatus(profile.immigrationStatus)} does not have ACA marketplace access under current eligibility rules`
     addNode({
       id: 'aca_result',
       label: 'ACA marketplace',
-      subtitle: 'Not eligible — status requirement',
+      subtitle: 'Not eligible',
       type: 'result',
       status: 'ineligible',
-      explanation: `${acaIneligibleReason}. Non-immigrant visa holders (F-1, J-1, H-1B) and undocumented individuals cannot receive marketplace subsidies.`,
+      explanation: acaIneligibleReason,
       legalBasis: '45 CFR § 155.305(a); ACA Section 1312(f)(3)',
       whatWouldChange: 'A qualifying immigration status change (green card, citizenship, or refugee/asylee grant) would make you ACA marketplace eligible.',
       profileData: `Status: ${formatStatus(profile.immigrationStatus)} → not in lawfully-present category`,
@@ -244,34 +250,66 @@ export function calculateEligibility(profile: UserProfile): EligibilityResult {
   }
 
   // ── Medicaid eligibility ──
-  const medicaidStatusEligible = ['us_citizen', 'refugee_asylee'].includes(profile.immigrationStatus)
-  const medicaidLPR = profile.immigrationStatus === 'green_card'
-  const medicaidDACA = profile.immigrationStatus === 'daca' && DACA_MEDICAID_STATES.includes(profile.state)
-  const medicaidStatusQualifies = medicaidStatusEligible || medicaidLPR || medicaidDACA
+  // Federal Medicaid requires "qualified alien" status (8 USC § 1611).
+  // LPRs are subject to the 5-year bar (8 USC § 1613) — they must hold their green card
+  // for 5 years before qualifying. Some states waive this using their own funds.
+  // Refugees/asylees are exempt from the 5-year bar.
+  // Some states additionally fund coverage for DACA recipients and TPS holders.
+  const hasFederalMedicaidStatus = FEDERAL_MEDICAID_STATUSES.includes(profile.immigrationStatus)
+
+  // yearsAsLPR comes back as a string from the select ('0','1','3','5') despite the number type
+  const lprYears = profile.yearsAsLPR !== undefined ? Number(profile.yearsAsLPR) : undefined
+  const yearsAsLPRKnown = profile.immigrationStatus === 'green_card' && lprYears !== undefined
+
+  // If years are unknown for an LPR, assume the bar is cleared but add a warning.
+  // If years are known and < 5, check for state waiver.
+  const lprBarCleared = profile.immigrationStatus !== 'green_card' ||
+    lprYears === undefined ||
+    lprYears >= 5 ||
+    FIVE_YEAR_BAR_WAIVER_STATES.includes(profile.state)
+
+  if (profile.immigrationStatus === 'green_card' && !yearsAsLPRKnown) {
+    circumstances.push('Medicaid note: Green card holders cannot receive federal Medicaid for the first 5 years ("5-year bar") in most states. If you received your green card less than 5 years ago, verify your eligibility with your state Medicaid office.')
+  }
+
+  const lprUnderBarInWaiverState = profile.immigrationStatus === 'green_card' &&
+    yearsAsLPRKnown && lprYears! < 5 && FIVE_YEAR_BAR_WAIVER_STATES.includes(profile.state)
+
+  const federalMedicaidEligible = hasFederalMedicaidStatus && lprBarCleared
+  const medicaidDACA = profile.immigrationStatus === 'daca' && DACA_STATE_MEDICAID_STATES.includes(profile.state)
+  const medicaidTPS = profile.immigrationStatus === 'tps' && TPS_STATE_MEDICAID_STATES.includes(profile.state)
+  const medicaidStatusQualifies = federalMedicaidEligible || medicaidDACA || medicaidTPS
+
   const medicaidIncomeThreshold = ACA_EXPANSION_STATES.includes(profile.state) ? 138 : 100
   const medicaidIncomeEligible = fplPct <= medicaidIncomeThreshold
-
   const medicaidEligible = medicaidStatusQualifies && medicaidIncomeEligible
 
   if (medicaidStatusQualifies) {
-    // Status qualifies — determine if income is the gating factor
     if (medicaidEligible) {
       eligible.push('medicaid')
+      const isStateExpansion = medicaidDACA || medicaidTPS
       addNode({
         id: 'medicaid_result',
         label: 'Medicaid',
-        subtitle: 'Free or low-cost coverage',
+        subtitle: isStateExpansion
+          ? `State-funded Medicaid (${profile.state})`
+          : lprUnderBarInWaiverState
+          ? `Medicaid — ${profile.state} waives 5-year bar`
+          : 'Free or low-cost coverage',
         type: 'result',
         status: 'eligible',
-        explanation: 'You appear eligible for Medicaid. Apply through your state\'s Medicaid agency or Healthcare.gov. Coverage can start as soon as the month you apply.',
-        legalBasis: '42 USC § 1396a; Social Security Act § 1902',
+        explanation: isStateExpansion
+          ? `${profile.state} funds Medicaid coverage for ${profile.immigrationStatus === 'daca' ? 'DACA recipients' : 'TPS holders'} using state dollars. This is state-funded, not federal Medicaid — coverage details may differ slightly.`
+          : lprUnderBarInWaiverState
+          ? `${profile.state} waives the federal 5-year bar for green card holders, funding coverage through state dollars during your waiting period.`
+          : 'You appear eligible for Medicaid. Apply through your state\'s Medicaid agency or Healthcare.gov. Coverage can start as soon as the month you apply.',
+        legalBasis: isStateExpansion ? 'State-funded program (not federal Medicaid)' : '42 USC § 1396a; Social Security Act § 1902',
         profileData: `Income $${profile.annualIncome.toLocaleString()} = ${Math.round(fplPct)}% FPL → under ${medicaidIncomeThreshold}% threshold for ${profile.state}`,
       }, 'start', 'Medicaid check')
     } else {
       ineligible.push('medicaid')
       const inExpansionState = ACA_EXPANSION_STATES.includes(profile.state)
-      const fplBase = { 1: 15650, 2: 21150, 3: 26650, 4: 32150, 5: 37650, 6: 43150, 7: 48650, 8: 54150 }
-      const baseFPL = fplBase[Math.min(profile.householdSize, 8) as keyof typeof fplBase] ?? 54150
+      const baseFPL = FPL_BASE[Math.min(profile.householdSize, 8)] ?? 54150
       const medicaidIncomeLimit = Math.round(baseFPL * medicaidIncomeThreshold / 100)
       const incomeGap = Math.round(profile.annualIncome - medicaidIncomeLimit)
       addNode({
@@ -282,27 +320,37 @@ export function calculateEligibility(profile: UserProfile): EligibilityResult {
         status: 'ineligible',
         explanation: `Your income (${Math.round(fplPct)}% FPL) exceeds the Medicaid limit of ${medicaidIncomeThreshold}% FPL in ${profile.state}${inExpansionState ? ' (an expansion state)' : ' (a non-expansion state)'}.`,
         legalBasis: '42 USC § 1396a; 42 CFR § 435.119',
-        whatWouldChange: `Your income ($${profile.annualIncome.toLocaleString()}/yr) is $${incomeGap.toLocaleString()} above the ${medicaidIncomeThreshold}% FPL limit of $${medicaidIncomeLimit.toLocaleString()}/yr for a household of ${profile.householdSize} in ${profile.state}.${!ACA_EXPANSION_STATES.includes(profile.state) ? ' Moving to a Medicaid expansion state would raise the threshold to 138% FPL.' : ''}`,
+        whatWouldChange: `Your income ($${profile.annualIncome.toLocaleString()}/yr) is $${incomeGap.toLocaleString()} above the ${medicaidIncomeThreshold}% FPL limit of $${medicaidIncomeLimit.toLocaleString()}/yr for a household of ${profile.householdSize} in ${profile.state}.${!inExpansionState ? ' Moving to a Medicaid expansion state would raise the threshold to 138% FPL.' : ''}`,
         profileData: `Income $${profile.annualIncome.toLocaleString()} = ${Math.round(fplPct)}% FPL → exceeds ${medicaidIncomeThreshold}% threshold`,
       }, 'start', 'Medicaid check')
     }
   } else {
-    // Status does not qualify at all
     ineligible.push('medicaid')
-    const statusReason = profile.immigrationStatus === 'undocumented'
-      ? 'Undocumented individuals are not eligible for federal Medicaid (Emergency Medicaid only for immediate life-threatening emergencies)'
-      : profile.immigrationStatus === 'daca'
-      ? `DACA recipients are not eligible for federal Medicaid. In ${profile.state}, state-funded Medicaid for DACA is ${DACA_MEDICAID_STATES.includes(profile.state) ? 'available' : 'not available'}.`
-      : `${formatStatus(profile.immigrationStatus)} visa holders are not eligible for federal Medicaid`
+    let statusReason: string
+    if (profile.immigrationStatus === 'undocumented') {
+      statusReason = 'Undocumented individuals are not eligible for federal Medicaid. Emergency Medicaid (for immediate life-threatening conditions) is available in all states regardless of immigration status.'
+    } else if (profile.immigrationStatus === 'daca') {
+      statusReason = `DACA recipients are not eligible for federal Medicaid. In ${profile.state}, state-funded Medicaid for DACA recipients is not currently available.`
+    } else if (profile.immigrationStatus === 'tps') {
+      statusReason = `TPS holders are not eligible for federal Medicaid. In ${profile.state}, state-funded Medicaid for TPS holders is not currently available.`
+    } else if (profile.immigrationStatus === 'green_card' && yearsAsLPRKnown && lprYears! < 5) {
+      statusReason = `The federal 5-year bar applies in ${profile.state}. Green card holders must hold their card for 5 years before qualifying for federal Medicaid. States like California, New York, Massachusetts, and Washington fund coverage during this waiting period.`
+    } else {
+      statusReason = `${formatStatus(profile.immigrationStatus)} visa holders are not eligible for federal Medicaid`
+    }
     addNode({
       id: 'medicaid_result',
       label: 'Medicaid',
-      subtitle: 'Not eligible — immigration status',
+      subtitle: profile.immigrationStatus === 'green_card' && yearsAsLPRKnown && lprYears! < 5
+        ? `5-year bar applies — ${lprYears} of 5 years held`
+        : 'Not eligible — immigration status',
       type: 'result',
       status: 'ineligible',
       explanation: statusReason,
-      legalBasis: '8 USC § 1611; 8 USC § 1612; Social Security Act § 1903(v)',
-      whatWouldChange: 'Receiving a green card (and waiting 5 years in most states), gaining citizenship, or being granted refugee/asylee status would make you federally Medicaid-eligible.',
+      legalBasis: '8 USC § 1611; 8 USC § 1613; Social Security Act § 1903(v)',
+      whatWouldChange: profile.immigrationStatus === 'green_card' && yearsAsLPRKnown && lprYears! < 5
+        ? `You will become federally eligible after holding your green card for 5 years. Consider moving to a state that waives this bar (CA, NY, MA, WA, and others) if you need coverage sooner.`
+        : 'Receiving a green card (and waiting 5 years in most states), gaining citizenship, or being granted refugee/asylee status would make you federally Medicaid-eligible.',
       profileData: `Status: ${formatStatus(profile.immigrationStatus)} → not in federally-eligible category`,
     }, 'start', 'Medicaid check')
   }
@@ -342,8 +390,10 @@ export function calculateEligibility(profile: UserProfile): EligibilityResult {
     }
   }
 
-  // ── School / ISP — only for actual students or student visas ──
-  const isInternationalStudentVisa = ['f1_student', 'f1_opt', 'j1_scholar', 'j2'].includes(profile.immigrationStatus)
+  // ── School / ISP — only for students enrolled at a US school or on student visas ──
+  // J-2 dependents are spouses/children of J-1 holders, not students — removed from this list.
+  // J-2 gets marketplace access instead (they are lawfully present).
+  const isInternationalStudentVisa = ['f1_student', 'f1_opt', 'j1_scholar'].includes(profile.immigrationStatus)
   const isStudentContext = isInternationalStudentVisa || (
     profile.isStudent === true &&
     !['us_citizen', 'green_card', 'refugee_asylee', 'daca'].includes(profile.immigrationStatus)
@@ -406,10 +456,36 @@ export function calculateEligibility(profile: UserProfile): EligibilityResult {
     }, 'start', 'Job loss')
   }
 
-  // ── Short-term plans ──
-  const shortTermEligible = !['us_citizen', 'green_card', 'refugee_asylee'].includes(profile.immigrationStatus) ||
-    !profile.hasEmployerInsurance
-  if (shortTermEligible) {
+  // ── Medicare — age 65+ with qualifying immigration status ──
+  const medicareStatusEligible = ['us_citizen', 'green_card', 'refugee_asylee'].includes(profile.immigrationStatus)
+  if (profile.age >= 65 && medicareStatusEligible) {
+    eligible.push('medicare')
+    addNode({
+      id: 'medicare_result',
+      label: 'Medicare',
+      subtitle: 'Age-based federal coverage',
+      type: 'result',
+      status: 'eligible',
+      explanation: 'At 65+, you qualify for Medicare. Part A (hospital) is free if you or your spouse paid Medicare taxes for 10+ years. Part B (medical) has a monthly premium (~$174/month in 2024). Enroll in the 3-month window before your 65th birthday to avoid late enrollment penalties.',
+      legalBasis: '42 USC § 426 (Social Security Act § 226)',
+      profileData: `Age: ${profile.age} ≥ 65 + status: ${formatStatus(profile.immigrationStatus)} → Medicare eligible`,
+    }, 'start', 'Age 65+')
+    nextSteps.push({
+      id: 'enroll_medicare',
+      title: 'Enroll in Medicare',
+      description: 'Enroll during your Initial Enrollment Period — the 3 months before, the month of, and 3 months after your 65th birthday. Visit medicare.gov or ssa.gov to apply.',
+      priority: 'high',
+      actionUrl: 'https://www.medicare.gov',
+    })
+  }
+
+  // ── Short-term plans — last resort only, when no comprehensive option exists ──
+  // Only surfaced when the user has no access to marketplace, medicaid, employer, school, or medicare.
+  // Previously shown too broadly alongside comprehensive options; tightened here.
+  const hasComprehensiveOption = eligible.some(p =>
+    ['medicare', 'medicaid', 'employer_sponsored', 'aca_marketplace', 'school_plan', 'international_student_plan'].includes(p)
+  )
+  if (!hasComprehensiveOption) {
     eligible.push('short_term')
     addNode({
       id: 'short_term',
@@ -417,16 +493,16 @@ export function calculateEligibility(profile: UserProfile): EligibilityResult {
       subtitle: 'Limited coverage — last resort',
       type: 'result',
       status: 'pending',
-      explanation: 'Short-term plans are available to most people but have significant gaps: no coverage for pre-existing conditions, mental health, maternity, or preventive care. They should be a last resort. Duration is usually 1–3 months.',
-      whatWouldChange: 'Qualifying for a more comprehensive option (employer plan, ACA marketplace, Medicaid) is always preferable. Short-term plans should only be used to bridge temporary gaps.',
+      explanation: 'Short-term plans are available but have significant gaps: no coverage for pre-existing conditions, mental health, maternity, or preventive care. They should be a last resort used only to bridge temporary gaps in coverage.',
+      whatWouldChange: 'Qualifying for a more comprehensive option (employer plan, ACA marketplace, Medicaid) is always preferable. Short-term plans should only bridge temporary gaps.',
       profileData: `No primary comprehensive coverage available → short-term as fallback`,
     }, 'start', 'Fallback')
     circumstances.push('Short-term plans are available but have serious coverage limitations. Review carefully before enrolling.')
   }
 
-  // Determine primary recommendation
+  // Determine primary recommendation — priority order matters
   const priority: PlanType[] = [
-    'medicaid', 'employer_sponsored', 'aca_marketplace',
+    'medicare', 'medicaid', 'employer_sponsored', 'aca_marketplace',
     'school_plan', 'international_student_plan', 'cobra', 'short_term'
   ]
   const primaryRecommendation = priority.find(p => eligible.includes(p)) || 'short_term'
@@ -438,17 +514,13 @@ export function calculateEligibility(profile: UserProfile): EligibilityResult {
     profile.yearsLeftInCollege === 'less_than_1' &&
     eligible.includes('aca_marketplace')
   ) {
-    // If graduating soon and ACA-eligible, ACA might be better long term
-    // Still recommend school plan for now but note the transition
     circumstances.push('Since you\'re graduating soon, start exploring ACA marketplace options now so you\'re ready to transition without a coverage gap.')
   }
 
-  // Medication users: flag formulary importance
   if (profile.takesRegularMedications) {
     circumstances.push('Since you take regular medications, verify the plan\'s formulary (drug coverage list) before enrolling. Tiers 1-2 are usually generic/preferred brands with lowest copays.')
   }
 
-  // High usage: steer toward comprehensive plans
   if (profile.expectedHealthcareUsage === 'high') {
     circumstances.push('With frequent healthcare needs, prioritize plans with lower deductibles and out-of-pocket maximums, even if monthly premiums are higher.')
   }
@@ -496,7 +568,7 @@ export function calculateEligibility(profile: UserProfile): EligibilityResult {
       label: "Parent/spouse's plan",
       subtitle: `${insurer}${typeLabel} plan`,
       type: 'result',
-      status: 'pending', // will be updated after evaluateParentPlan
+      status: 'pending',
       explanation: 'You are currently covered as a dependent. Evaluation in progress based on your plan details.',
       profileData: `Dependent on: ${profile.dependentOnWhom ?? 'parent/spouse'} · insurer: ${profile.parentPlanInsurer ?? 'unknown'} · type: ${profile.parentPlanType ?? 'unknown'} · cost: $${profile.parentPlanPremiumContribution ?? '?'}/mo`,
     }, 'start', 'Dependent coverage')
@@ -532,7 +604,6 @@ export function calculateEligibility(profile: UserProfile): EligibilityResult {
       ? ` ${profile.parentPlanType.toUpperCase()}` : ''
     const planDesc = `${insurer}${typeLabel} plan`
 
-    // Update the parent_plan node status based on recommendation
     const ppNode = nodes.find(n => n.id === 'parent_plan')
     if (ppNode) {
       ppNode.status = parentRec === 'stay' ? 'eligible' : parentRec === 'consider_switching' ? 'pending' : 'ineligible'
@@ -598,12 +669,11 @@ export function calculateEligibility(profile: UserProfile): EligibilityResult {
     : adjustedPrimary === 'school_plan' ? 'school_plan'
     : adjustedPrimary === 'international_student_plan' ? 'isp'
     : adjustedPrimary === 'cobra' ? 'cobra_result'
+    : adjustedPrimary === 'medicare' ? 'medicare_result'
     : adjustedPrimary === 'parent_plan' ? 'parent_plan'
     : 'short_term'
 
-  // Walk from primary result back to start via edges and mark all as primaryPath
   const primaryPathIds = new Set<string>(['start', primaryResultNodeId])
-  // Subsidy is on the primary path when ACA is primary
   if (adjustedPrimary === 'aca_marketplace') {
     const subsidyNode = nodes.find(n => n.id === 'subsidy')
     if (subsidyNode) primaryPathIds.add('subsidy')
@@ -631,7 +701,7 @@ export function calculateEligibility(profile: UserProfile): EligibilityResult {
     ineligiblePlans: ineligible,
     primaryRecommendation: adjustedPrimary,
     bestOptionReasoning,
-    subsidyEligible: acaEligible && fplPct >= 100 && fplPct <= 400,
+    subsidyEligible: aptcStatusEligible && fplPct >= 100 && fplPct <= 400,
     estimatedSubsidy: undefined,
     costEstimates,
     specialCircumstances: circumstances,
@@ -657,6 +727,8 @@ function formatStatus(status: string): string {
     l1: 'L-1 Visa',
     o1: 'O-1 Visa',
     tn: 'TN Visa',
+    tps: 'Temporary Protected Status (TPS)',
+    parolee: 'Humanitarian Parolee',
     other: 'Other Status',
   }
   return labels[status] || status

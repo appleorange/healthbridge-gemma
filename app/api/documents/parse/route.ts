@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
-import type { UserProfile } from '@/types'
+import { DocumentParseRequestSchema } from '@/lib/validation/schemas'
+import { getFPLPercent } from '@/lib/constants/fpl'
 
 export const runtime = 'nodejs'
 
@@ -34,22 +35,17 @@ Respond ONLY with valid JSON matching this exact structure (no markdown, no expl
 
 export async function POST(req: Request) {
   try {
-    const { fileData, mimeType, fileName, userProfile } = await req.json() as {
-      fileData: string
-      mimeType: string
-      fileName: string
-      userProfile?: UserProfile
+    const body = await req.json()
+    const parsed = DocumentParseRequestSchema.safeParse(body)
+    if (!parsed.success) {
+      return Response.json({ error: 'Invalid request', details: parsed.error.issues }, { status: 400 })
     }
+    const { fileData, mimeType, fileName, userProfile } = parsed.data
 
-    const isImage = mimeType.startsWith('image/')
     const isPDF = mimeType === 'application/pdf'
 
-    if (!isImage && !isPDF) {
-      return Response.json({ error: 'Unsupported file type. Please upload a PDF or image.' }, { status: 400 })
-    }
-
     const userContext = userProfile
-      ? `\n\nUser context: ${userProfile.immigrationStatus} status, ${userProfile.state} state, household income at approximately ${Math.round((userProfile.annualIncome / 15060) * 100)}% FPL.`
+      ? `\n\nUser context: ${userProfile.immigrationStatus} status, ${userProfile.state} state, household income at approximately ${Math.round(getFPLPercent(userProfile.annualIncome, userProfile.householdSize))}% FPL.`
       : ''
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -78,12 +74,12 @@ export async function POST(req: Request) {
       throw new Error('No JSON found in Claude response')
     }
 
-    const parsed = JSON.parse(jsonMatch[0])
+    const result = JSON.parse(jsonMatch[0])
 
     return Response.json({
       id: Date.now().toString(),
       fileName,
-      ...parsed,
+      ...result,
     })
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : String(error)

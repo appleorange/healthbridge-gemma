@@ -56,6 +56,8 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
           { value: 'tn', label: 'TN Visa (NAFTA/USMCA)', description: 'Canadian or Mexican professional' },
           { value: 'daca', label: 'DACA', description: 'Deferred Action for Childhood Arrivals' },
           { value: 'refugee_asylee', label: 'Refugee or Asylee', description: 'Granted refugee status or asylum' },
+          { value: 'tps', label: 'Temporary Protected Status (TPS)', description: 'TPS granted due to armed conflict, disaster, or extraordinary conditions in home country' },
+          { value: 'parolee', label: 'Humanitarian Parolee', description: 'Paroled into the US for humanitarian reasons (Afghan, Ukrainian, Cuban/Haitian Entrant, etc.)' },
           { value: 'undocumented', label: 'Undocumented / No Current Status', description: 'No current legal immigration status' },
           { value: 'other', label: 'Other / Not Listed', description: 'My status is not listed above' },
         ],
@@ -609,7 +611,8 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
 
 // Helper: determine which steps to show based on current profile state
 export function getVisibleSteps(profile: Record<string, unknown>): OnboardingStep[] {
-  const studentVisaStatuses = ['f1_student', 'f1_opt', 'j1_scholar', 'j2']
+  // j2 is a spouse/child of a J-1, not a student — excluded from auto-triggering the student step
+  const studentVisaStatuses = ['f1_student', 'f1_opt', 'j1_scholar']
   const isStudentVisa = studentVisaStatuses.includes(profile.immigrationStatus as string)
   const isStudentEmployment = profile.employmentStatus === 'student'
   const isStudentToggled = profile.isStudent === true

@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { buildSystemPrompt } from '@/lib/prompts/system'
-import type { UserProfile } from '@/types'
+import { ChatRequestSchema } from '@/lib/validation/schemas'
 
 export const runtime = 'nodejs'
 
@@ -10,10 +10,12 @@ const client = new Anthropic({
 
 export async function POST(req: Request) {
   try {
-    const { messages, userProfile } = await req.json() as {
-      messages: Array<{ role: 'user' | 'assistant'; content: string }>
-      userProfile?: UserProfile
+    const body = await req.json()
+    const parsed = ChatRequestSchema.safeParse(body)
+    if (!parsed.success) {
+      return Response.json({ error: 'Invalid request', details: parsed.error.issues }, { status: 400 })
     }
+    const { messages, userProfile } = parsed.data
 
     const systemPrompt = buildSystemPrompt(
       userProfile?.immigrationStatus || 'other',

@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { AppealDraftRequestSchema } from '@/lib/validation/schemas'
 
 export const runtime = 'nodejs'
 
@@ -8,7 +9,13 @@ const client = new Anthropic({
 })
 
 export async function POST(req: NextRequest) {
-  const { denialInfo, analysis, planType, state, age } = await req.json()
+  try {
+    const body = await req.json()
+    const parsed = AppealDraftRequestSchema.safeParse(body)
+    if (!parsed.success) {
+      return Response.json({ error: 'Invalid request', details: parsed.error.issues }, { status: 400 })
+    }
+    const { denialInfo, analysis, planType, state, age } = parsed.data
 
   const stream = await client.messages.stream({
     model: 'claude-sonnet-4-6',
@@ -63,4 +70,9 @@ Do not include any placeholder text in brackets. Use the actual plan name, servi
       'Transfer-Encoding': 'chunked',
     },
   })
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : String(error)
+    console.error('Appeal draft error:', errMsg)
+    return Response.json({ error: errMsg }, { status: 500 })
+  }
 }

@@ -13,6 +13,8 @@ export type ImmigrationStatus =
   | 'tn'
   | 'daca'
   | 'refugee_asylee'
+  | 'tps'
+  | 'parolee'
   | 'undocumented'
   | 'other'
 

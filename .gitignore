@@ -38,3 +38,9 @@ Thumbs.db
 # Build cache
 .next/
 node_modules/
+
+# TypeScript incremental build info
+tsconfig.tsbuildinfo
+
+# Claude Code local settings (permissions are machine-specific)
+.claude/settings.local.json

@@ -1,10 +1,14 @@
 import { calculateEligibility } from '@/lib/eligibility/engine'
-import type { UserProfile } from '@/types'
+import { EligibilityRequestSchema } from '@/lib/validation/schemas'
 
 export async function POST(req: Request) {
   try {
-    const { profile } = await req.json() as { profile: UserProfile }
-    const result = calculateEligibility(profile)
+    const body = await req.json()
+    const parsed = EligibilityRequestSchema.safeParse(body)
+    if (!parsed.success) {
+      return Response.json({ error: 'Invalid request', details: parsed.error.issues }, { status: 400 })
+    }
+    const result = calculateEligibility(parsed.data.profile)
     return Response.json(result)
   } catch (error) {
     console.error('Eligibility API error:', error)

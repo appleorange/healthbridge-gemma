@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server'
 import { getPlansForProfile } from '@/lib/plans/plan-finder'
-import type { UserProfile, PlanType } from '@/types'
+import { PlansRequestSchema } from '@/lib/validation/schemas'
 
 export async function POST(req: Request) {
   try {
-    const { profile, eligiblePlans, primaryRecommendation } = await req.json() as {
-      profile: UserProfile
-      eligiblePlans: PlanType[]
-      primaryRecommendation: PlanType
+    const body = await req.json()
+    const parsed = PlansRequestSchema.safeParse(body)
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'Invalid request', details: parsed.error.issues }, { status: 400 })
     }
+    const { profile, eligiblePlans, primaryRecommendation } = parsed.data
     const plans = await getPlansForProfile(profile, eligiblePlans, primaryRecommendation)
     return NextResponse.json({ plans })
   } catch (e) {

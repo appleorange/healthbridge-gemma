@@ -1,15 +1,9 @@
 import type { UserProfile, PlanType, CostEstimate } from '@/types'
 import { matchEmployerPlans, KNOWN_EMPLOYER_PLANS } from '@/lib/plans/plan-finder'
-
-// 2026 Federal Poverty Level thresholds
-const FPL_BASE: Record<number, number> = {
-  1: 15650, 2: 21150, 3: 26650, 4: 32150,
-  5: 37650, 6: 43150, 7: 48650, 8: 54150,
-}
+import { getFPLPercent } from '@/lib/constants/fpl'
 
 export function getFPL(income: number, householdSize: number): number {
-  const base = FPL_BASE[Math.min(householdSize, 8)] ?? 54150 + (householdSize - 8) * 5500
-  return (income / base) * 100
+  return getFPLPercent(income, householdSize)
 }
 
 // Local type for subsidy calculation result
