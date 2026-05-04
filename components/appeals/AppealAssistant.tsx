@@ -1,7 +1,8 @@
 'use client'
-import { useState, useEffect } from 'react'
-import { Send, Loader, CheckCircle, AlertCircle, Copy, ChevronRight, FileText } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Send, Loader, CheckCircle, AlertCircle, Copy, ChevronRight, FileText, Upload, X } from 'lucide-react'
 import type { UserProfile, EligibilityResult } from '@/types'
+import TrustBanner from '@/components/ui/TrustBanner'
 
 interface Props {
   userProfile?: UserProfile
@@ -16,6 +17,7 @@ interface DenialInfo {
   denialDate: string
   serviceDescription: string
   denialCode: string
+  policyLanguage?: string
 }
 
 interface AnalysisResult {
@@ -44,8 +46,11 @@ export default function AppealAssistant({ userProfile, eligibilityResult }: Prop
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null)
   const [appealLetter, setAppealLetter] = useState('')
   const [loading, setLoading] = useState(false)
+  const [extracting, setExtracting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [documentName, setDocumentName] = useState('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     try {
@@ -76,6 +81,45 @@ export default function AppealAssistant({ userProfile, eligibilityResult }: Prop
       }
     } catch {}
   }, [userProfile, eligibilityResult])
+
+  async function handleDocumentUpload(file: File) {
+    if (file.size > 5 * 1024 * 1024) {
+      setError('File too large. Please upload a file under 5MB.')
+      return
+    }
+    setExtracting(true)
+    setError(null)
+    try {
+      const buffer = await file.arrayBuffer()
+      const bytes = new Uint8Array(buffer)
+      let binary = ''
+      for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i])
+      }
+      const base64 = btoa(binary)
+      const res = await fetch('/api/appeal/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileData: base64, mimeType: file.type }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Extraction failed')
+      setDenialInfo(prev => ({
+        ...prev,
+        planName: data.planName ?? prev.planName,
+        denialCode: data.denialCode ?? prev.denialCode,
+        denialReason: data.denialReason ?? prev.denialReason,
+        serviceDescription: data.serviceDescription ?? prev.serviceDescription,
+        denialDate: data.denialDate ?? prev.denialDate,
+        policyLanguage: data.policyLanguage ?? prev.policyLanguage,
+      }))
+      setDocumentName(file.name)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to read document')
+    } finally {
+      setExtracting(false)
+    }
+  }
 
   async function analyzeAppeal() {
     const appealCount = parseInt(sessionStorage.getItem(appealCountKey) ?? '0')
@@ -170,6 +214,7 @@ export default function AppealAssistant({ userProfile, eligibilityResult }: Prop
     setAnalysis(null)
     setAppealLetter('')
     setError(null)
+    setDocumentName('')
   }
 
   if (step === 'entry') {
@@ -181,6 +226,53 @@ export default function AppealAssistant({ userProfile, eligibilityResult }: Prop
             Most denials can be appealed. The AI will analyze your denial and write a professional appeal letter.
             Under the ACA, you have at least 180 days from the denial date to file an internal appeal.
           </p>
+        </div>
+
+        <div>
+          <label className="text-xs font-medium text-gray-600 mb-1.5 block">
+            Upload denial letter or EOB <span className="text-gray-400 font-normal">(optional — auto-fills the form)</span>
+          </label>
+          {documentName ? (
+            <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-xl">
+              <div className="flex items-center gap-2 min-w-0">
+                <FileText className="w-4 h-4 text-green-600 flex-shrink-0" />
+                <span className="text-xs text-green-800 font-medium truncate">{documentName}</span>
+                <span className="text-xs text-green-600 flex-shrink-0">— fields pre-filled</span>
+              </div>
+              <button
+                onClick={() => {
+                  setDocumentName('')
+                  setDenialInfo(prev => ({ ...prev, policyLanguage: '' }))
+                  if (fileInputRef.current) fileInputRef.current.value = ''
+                }}
+                className="ml-2 text-gray-400 hover:text-gray-600 flex-shrink-0"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <label className="flex flex-col items-center gap-2 p-4 border-2 border-dashed border-gray-200 rounded-xl cursor-pointer hover:border-brand-300 hover:bg-brand-50/30 transition-all">
+              {extracting ? (
+                <>
+                  <Loader className="w-5 h-5 text-brand-500 animate-spin" />
+                  <span className="text-xs text-brand-600">Reading document…</span>
+                </>
+              ) : (
+                <>
+                  <Upload className="w-5 h-5 text-gray-400" />
+                  <span className="text-xs text-gray-500">JPEG, PNG, or PDF · max 5MB</span>
+                </>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
+                onChange={e => e.target.files?.[0] && handleDocumentUpload(e.target.files[0])}
+                disabled={extracting}
+              />
+            </label>
+          )}
         </div>
 
         <div className="space-y-3">
@@ -215,7 +307,7 @@ export default function AppealAssistant({ userProfile, eligibilityResult }: Prop
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-gray-600 mb-1 block">Denial code (if shown)</label>
+              <label className="text-xs font-medium text-gray-600 mb-1 block">Denial code <span className="text-gray-400 font-normal">(optional)</span></label>
               <input
                 type="text"
                 value={denialInfo.denialCode}
@@ -223,6 +315,7 @@ export default function AppealAssistant({ userProfile, eligibilityResult }: Prop
                 placeholder="e.g. CO-4, PR-96"
                 className="w-full text-sm px-3 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-brand-400"
               />
+              <p className="text-xs text-gray-400 mt-1">Found on your Explanation of Benefits (EOB) letter, usually under "Adjustment Reason" or "Remark Code." Leave blank if not shown.</p>
             </div>
           </div>
           <div>
@@ -235,6 +328,15 @@ export default function AppealAssistant({ userProfile, eligibilityResult }: Prop
               className="w-full text-sm px-3 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-brand-400 resize-none"
             />
           </div>
+          {denialInfo.policyLanguage && (
+            <div>
+              <label className="text-xs font-medium text-gray-600 mb-1 block">Policy language cited in denial</label>
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                <p className="text-xs text-amber-800 italic">"{denialInfo.policyLanguage}"</p>
+              </div>
+              <p className="text-xs text-gray-400 mt-1">Extracted from your document — will be quoted directly in your appeal letter.</p>
+            </div>
+          )}
         </div>
 
         {error && (
@@ -387,6 +489,11 @@ export default function AppealAssistant({ userProfile, eligibilityResult }: Prop
 
         {!loading && appealLetter && (
           <>
+            <TrustBanner
+              text="This draft is for informational use only — not legal advice. Review with a patient advocate or attorney before sending."
+              verifyUrl="https://www.healthcare.gov/health-care-law-protections/appeals/"
+              verifyLabel="Learn about appeal rights →"
+            />
             <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl">
               <p className="text-xs text-amber-700">
                 <strong>Before sending:</strong> Review and personalize this letter. Add your specific medical records,

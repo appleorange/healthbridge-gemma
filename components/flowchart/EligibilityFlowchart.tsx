@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import type { FlowchartNode, UserProfile } from '@/types'
+import TrustBanner from '@/components/ui/TrustBanner'
 
 interface Props {
   nodes: FlowchartNode[]
@@ -272,6 +273,12 @@ export default function EligibilityFlowchart({ nodes, edges, profile }: Props) {
         </div>
         <span className="text-gray-400 ml-1">· Click any node for details</span>
       </div>
+
+      <TrustBanner
+        text="For informational use only — not legal or insurance advice. Rules verified against NILC/KFF 2025. Click any node to see the specific rule and legal source behind each decision."
+        verifyUrl="https://www.healthcare.gov"
+        verifyLabel="Verify on healthcare.gov →"
+      />
 
       {/* Main tree from root */}
       <div className="flex flex-col items-center w-full">

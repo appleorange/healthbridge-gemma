@@ -53,6 +53,19 @@ Before any /clear or session end:
 
 Do not let me end a session without prompting this checklist if we wrote any code.
 
+## Testing Rule — Edge Cases on Substantial Changes
+
+Whenever a change touches a type definition, Zod schema, enum value, or API contract, verify that every layer stays in sync:
+
+1. **Type added or changed** → check `lib/validation/schemas.ts` for the matching Zod schema and update it
+2. **New enum value** → search for every `z.enum([...])` that covers that field; add the value to each
+3. **New API route behavior** → add a test or note the edge cases explicitly; don't rely on TypeScript alone — Zod schemas are runtime and the type system won't catch mismatches
+4. **Eligibility engine change** → run the test matrix (`.claude/TASKS.md`) and add any new cases the change introduces
+
+The class of bug to prevent: TypeScript types and Zod schemas drift apart silently. The type compiles clean; the API rejects valid input at runtime; the UI crashes on an unexpected undefined.
+
+**When in doubt, ask:** "Is there a runtime boundary (API route, sessionStorage parse, external input) where this value will be validated separately from the type?" If yes, update that boundary too.
+
 ## Things to Never Do
 - Never add a database, ORM, or user auth without explicit discussion
 - Never commit secrets or `.env.local`

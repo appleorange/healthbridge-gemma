@@ -84,7 +84,7 @@ export interface UserProfile {
   monthlyPremiumBudget?: number
 
   // ACA subsidy specific
-  filingStatus?: 'single' | 'married_joint' | 'married_separate' | 'head_of_household'
+  filingStatus?: 'single' | 'married_joint' | 'married_separate' | 'head_of_household' | 'not_applicable'
   receivingUnemploymentBenefits?: boolean
   unemployedMonths?: number
 

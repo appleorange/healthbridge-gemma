@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Send, Bot, User, Trash2 } from 'lucide-react'
 import type { UserProfile, ChatMessage } from '@/types'
 import Typewriter from '@/components/ui/Typewriter'
+import TrustBanner from '@/components/ui/TrustBanner'
 
 interface Props {
   userProfile: UserProfile
@@ -186,6 +187,11 @@ export default function ChatInterface({ userProfile, autoSendPrompt, onAutoPromp
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
+        <TrustBanner
+          text="AI responses are informational only — not legal or insurance advice. For complex situations, find a free certified navigator."
+          verifyUrl="https://www.healthcare.gov/find-assistance/"
+          verifyLabel="Find a navigator →"
+        />
         {messages.map(msg => (
           <div key={msg.id} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
             <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-1 ${

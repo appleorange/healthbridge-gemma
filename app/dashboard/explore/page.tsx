@@ -137,6 +137,9 @@ export default function ExplorePage() {
                 Why? →
               </button>
             </div>
+            <p className="text-xs text-gray-500 -mt-2 px-1">
+              The plans below are ACA Marketplace options available near you based on your ZIP code — not necessarily your top recommendation above. They&apos;re shown so you can compare costs if your situation changes.
+            </p>
             {!profile.zipCode && (
               <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700 flex items-center gap-2">
                 <MapPin className="w-4 h-4 shrink-0" />

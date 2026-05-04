@@ -34,7 +34,7 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'status',
     title: 'What is your immigration status?',
-    subtitle: 'This is the single most important factor in determining your health insurance options.',
+    subtitle: 'This is the single most important factor in determining your health insurance options. Your answers are only used to calculate eligibility — they are never stored on a server or shared.',
     fields: [
       {
         id: 'immigrationStatus',
@@ -69,7 +69,7 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
         type: 'select',
         required: false,
         showWhen: { field: 'immigrationStatus', value: 'green_card' },
-        helpText: 'The 5-year bar affects Medicaid eligibility for green card holders.',
+        helpText: 'The 5-year bar is a federal rule that delays Medicaid eligibility for most green card holders. Some states (CA, NY, MA, WA, and others) pay for coverage during this waiting period using their own funds.',
         options: [
           { value: '0', label: 'Less than 1 year' },
           { value: '1', label: '1–2 years' },
@@ -120,6 +120,7 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
           { value: 'employed_parttime', label: 'Employed part-time (<30 hrs/week)', description: 'Part-time, hourly, or seasonal' },
           { value: 'self_employed', label: 'Self-employed or freelance', description: 'Independent contractor, gig work, or own business' },
           { value: 'student', label: 'Student (not currently working)', description: 'Full-time or part-time student' },
+          { value: 'dependent', label: 'Not authorized to work (dependent)', description: 'H-4, J-2, or other status without work authorization — income from spouse/parent' },
           { value: 'unemployed_seeking', label: 'Unemployed — actively looking for work', description: 'Currently job searching' },
           { value: 'unemployed_not_seeking', label: 'Unemployed — not looking for work', description: 'Not currently job searching' },
           { value: 'retired', label: 'Retired', description: 'No longer working' },
@@ -150,7 +151,7 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
         type: 'toggle',
         required: false,
         showWhen: { field: 'employmentStatus', value: 'employed_fulltime' },
-        helpText: "Even if you haven't enrolled yet, tell us if your employer offers coverage.",
+        helpText: "Even if you haven't enrolled yet, tell us if your employer offers coverage. If they do, we'll still help you compare it against marketplace options so you can decide what's best.",
       },
       {
         id: 'hasEmployerInsurance',
@@ -339,7 +340,7 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
         type: 'number',
         placeholder: 'e.g. 2',
         required: true,
-        helpText: 'Count yourself plus anyone you claim on your tax return (spouse, children, dependents).',
+        helpText: 'Count everyone who lives with you and depends on your income — yourself, your spouse, and your children. You do not need to have filed US taxes together.',
       },
       {
         id: 'annualIncome',
@@ -347,7 +348,7 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
         type: 'number',
         placeholder: 'e.g. 45000',
         required: true,
-        helpText: 'Use your best estimate before taxes. This calculates subsidy eligibility — it is not stored or shared.',
+        helpText: 'Use your best estimate before taxes. Include wages, stipends, research/teaching assistantships, freelance income, and cash income. If you are a student with a stipend, count it here. Not stored or shared.',
       },
       {
         id: 'filingStatus',
@@ -360,6 +361,7 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
           { value: 'married_joint', label: 'Married, filing jointly' },
           { value: 'married_separate', label: 'Married, filing separately' },
           { value: 'head_of_household', label: 'Head of household' },
+          { value: 'not_applicable', label: 'I don\'t file US taxes', description: 'Non-filer or not required to file' },
         ],
       },
       {
@@ -611,8 +613,10 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
 
 // Helper: determine which steps to show based on current profile state
 export function getVisibleSteps(profile: Record<string, unknown>): OnboardingStep[] {
-  // j2 is a spouse/child of a J-1, not a student — excluded from auto-triggering the student step
-  const studentVisaStatuses = ['f1_student', 'f1_opt', 'j1_scholar']
+  // j1_scholar and j2 are NOT included — J-1 scholars are researchers, not students.
+  // J-1 scholars who ARE enrolled at a university will have employmentStatus === 'student',
+  // which triggers the step via isStudentEmployment below.
+  const studentVisaStatuses = ['f1_student', 'f1_opt']
   const isStudentVisa = studentVisaStatuses.includes(profile.immigrationStatus as string)
   const isStudentEmployment = profile.employmentStatus === 'student'
   const isStudentToggled = profile.isStudent === true

@@ -135,7 +135,7 @@ function evaluateParentPlan(profile: UserProfile, fplPct: number): 'stay' | 'con
 
   // Strong signals to switch
   if (profile.agingOffDate === 'already_aged_off') switchScore += 5
-  if (profile.agingOffDate === 'under_1_year') switchScore += 3
+  if (profile.agingOffDate === 'under_1_year') switchScore += 4
   if (profile.parentPlanSatisfied === 'unhappy') switchScore += 3
   if (
     profile.parentPlanPremiumContribution === 'over_300' &&
@@ -247,6 +247,17 @@ export function calculateEligibility(profile: UserProfile): EligibilityResult {
       whatWouldChange: 'A qualifying immigration status change (green card, citizenship, or refugee/asylee grant) would make you ACA marketplace eligible.',
       profileData: `Status: ${formatStatus(profile.immigrationStatus)} → not in lawfully-present category`,
     }, 'start', 'ACA check')
+
+    if (profile.immigrationStatus === 'undocumented') {
+      circumstances.push('Emergency Medicaid covers emergency stabilization at any US hospital, regardless of immigration status. Federally Qualified Health Centers (FQHCs) offer primary care, dental, and mental health on a sliding-scale fee — available to everyone, no documentation required.')
+      nextSteps.push({
+        id: 'fqhc',
+        title: 'Find a community health center near you',
+        description: 'FQHCs provide primary and preventive care to everyone on a sliding-scale fee based on income. No documentation required.',
+        priority: 'high',
+        actionUrl: 'https://findahealthcenter.hrsa.gov',
+      })
+    }
   }
 
   // ── Medicaid eligibility ──
@@ -280,6 +291,10 @@ export function calculateEligibility(profile: UserProfile): EligibilityResult {
   const medicaidTPS = profile.immigrationStatus === 'tps' && TPS_STATE_MEDICAID_STATES.includes(profile.state)
   const medicaidStatusQualifies = federalMedicaidEligible || medicaidDACA || medicaidTPS
 
+  // VERIFY: Non-expansion state threshold (100% FPL) is overly generous. In most non-expansion
+  // states (TX, FL, GA…), Medicaid for non-disabled adults without children is near 0% FPL.
+  // Parents may qualify up to ~15-25% FPL. Without a per-state table, 100% is used here as a
+  // conservative cap. A circumstance warning is added for users matched as eligible in non-expansion states.
   const medicaidIncomeThreshold = ACA_EXPANSION_STATES.includes(profile.state) ? 138 : 100
   const medicaidIncomeEligible = fplPct <= medicaidIncomeThreshold
   const medicaidEligible = medicaidStatusQualifies && medicaidIncomeEligible
@@ -355,6 +370,39 @@ export function calculateEligibility(profile: UserProfile): EligibilityResult {
     }, 'start', 'Medicaid check')
   }
 
+  // ── Coverage gap warning ──
+  // In non-expansion states, adults below 100% FPL fall into a "coverage gap":
+  // they earn too little for ACA marketplace subsidies (PTC requires ≥100% FPL)
+  // but the state doesn't cover them through Medicaid.
+  // VERIFY: TX/FL/GA and other non-expansion states have near-zero Medicaid threshold for
+  // non-disabled adults without dependents — the 100% floor here is conservative.
+  const inCoverageGap = !ACA_EXPANSION_STATES.includes(profile.state) &&
+    fplPct < 100 &&
+    acaEligible &&
+    !medicaidEligible
+
+  if (inCoverageGap) {
+    circumstances.push(
+      `Coverage gap alert: Your income (${Math.round(fplPct)}% FPL) is below 100% of the federal poverty level. In ${profile.state} (a non-expansion state), the ACA marketplace requires income ≥ 100% FPL for subsidies, but state Medicaid doesn't cover most adults at this income level. You may still purchase a marketplace plan without a subsidy. Consider contacting your county health department or a local FQHC for low-cost care options.`
+    )
+  }
+
+  // #4: Non-expansion Medicaid false-positive warning — our 100% FPL threshold is conservative;
+  // warn users to verify since most non-expansion states have much lower actual thresholds.
+  if (medicaidEligible && !ACA_EXPANSION_STATES.includes(profile.state)) {
+    circumstances.push(
+      `Medicaid eligibility note: ${profile.state} has not expanded Medicaid. Eligibility for adults in non-expansion states is more limited than the estimate above — actual income thresholds are often much lower than 100% FPL, and non-disabled adults without children may not qualify at all. Verify directly with your state Medicaid office before relying on this estimate.`
+    )
+  }
+
+  // #9: No subsidy shown — explain why for ACA-eligible users under 100% FPL
+  const acaEligibleNoSubsidy = acaEligible && fplPct < 100 && !medicaidEligible && !inCoverageGap
+  if (acaEligibleNoSubsidy) {
+    circumstances.push(
+      `No subsidy shown: ACA marketplace subsidies require income of at least 100% FPL ($${((FPL_BASE[Math.min(profile.householdSize, 8)] ?? 15650)).toLocaleString()}/yr for a household of ${profile.householdSize}). Your estimated income (${Math.round(fplPct)}% FPL) is below that threshold. If you have income from wages, stipends, or other sources that you haven't included, update your estimate — even modest income can unlock significant credits.`
+    )
+  }
+
   // ── Employer-sponsored ──
   if (profile.hasEmployerInsurance) {
     eligible.push('employer_sponsored')
@@ -426,7 +474,9 @@ export function calculateEligibility(profile: UserProfile): EligibilityResult {
     }
 
     if (profile.immigrationStatus === 'j1_scholar') {
-      circumstances.push('J-1 federal mandate: you are legally required to carry health insurance meeting specific minimums (22 CFR 62.14). Verify any plan meets these requirements.')
+      circumstances.push(
+        'J-1 insurance mandate (22 CFR § 62.14): your visa legally requires coverage meeting all of these minimums — medical benefits of at least $100,000 per accident or illness, medical evacuation coverage of at least $50,000, repatriation coverage of at least $25,000, and a deductible no higher than $500 per accident or illness. Most ACA marketplace plans and school plans meet these requirements; many short-term plans do not. Ask your program sponsor (DS-2019 issuer) to confirm any plan you choose satisfies § 62.14 before enrolling.'
+      )
     }
     if (profile.yearsLeftInCollege === 'less_than_1') {
       circumstances.push('You\'re graduating soon — check your school plan\'s termination date and plan your transition to post-graduation coverage in advance.')
@@ -436,13 +486,27 @@ export function calculateEligibility(profile: UserProfile): EligibilityResult {
   // ── COBRA ──
   if (['unemployed_seeking', 'unemployed_not_seeking'].includes(profile.employmentStatus) && profile.currentlyInsured) {
     eligible.push('cobra')
-    circumstances.push('You may be eligible for COBRA continuation coverage. You have 60 days from job loss to elect it. Cost is high — you pay the full premium — but coverage is identical to your prior plan.')
-    nextSteps.push({
-      id: 'cobra',
-      title: 'Elect COBRA within 60 days',
-      description: 'Contact your former employer\'s HR department. You have exactly 60 days from your coverage end date to elect COBRA.',
-      priority: 'high',
-    })
+    if (profile.onCOBRA) {
+      const monthsLeft = profile.cobraMonthsRemaining ?? 0
+      circumstances.push(
+        `You are currently on COBRA. COBRA lasts up to 18 months total. ${monthsLeft > 0 ? `You have approximately ${monthsLeft} month${monthsLeft === 1 ? '' : 's'} remaining. ` : ''}When your COBRA ends, job loss is a Special Enrollment Period trigger — you'll have 60 days to enroll in an ACA marketplace plan. Compare marketplace plans now to be ready for the transition.`
+      )
+      nextSteps.push({
+        id: 'cobra_transition',
+        title: 'Plan your COBRA transition',
+        description: `COBRA ends after 18 months. ${monthsLeft > 0 ? `With ~${monthsLeft} months remaining, start comparing ACA marketplace plans now — ` : 'Your COBRA ends soon — '}job loss qualifies you for a Special Enrollment Period when you switch.`,
+        priority: monthsLeft > 0 && monthsLeft <= 3 ? 'high' : 'medium',
+        actionUrl: 'https://www.healthcare.gov',
+      })
+    } else {
+      circumstances.push('You may be eligible for COBRA continuation coverage. You have 60 days from job loss to elect it. Cost is high — you pay the full premium — but coverage is identical to your prior plan.')
+      nextSteps.push({
+        id: 'cobra',
+        title: 'Elect COBRA within 60 days',
+        description: 'Contact your former employer\'s HR department. You have exactly 60 days from your coverage end date to elect COBRA.',
+        priority: 'high',
+      })
+    }
     addNode({
       id: 'cobra_result',
       label: 'COBRA continuation',
@@ -537,12 +601,23 @@ export function calculateEligibility(profile: UserProfile): EligibilityResult {
   }
 
   if (eligible.includes('aca_marketplace')) {
+    const hasSEP = profile.agingOffDate === 'under_1_year' ||
+      profile.agingOffDate === 'already_aged_off' ||
+      profile.employmentStatus === 'unemployed_seeking' ||
+      profile.onCOBRA === true
+
+    const marketplaceDescription = dacaStateExchange && !acaMarketplaceAccess
+      ? 'Enroll through Covered California at coveredca.gov — DACA recipients in California are not eligible for the federal marketplace.'
+      : hasSEP
+      ? 'You likely qualify for a Special Enrollment Period (SEP) right now — you don\'t need to wait for Open Enrollment (Nov 1 – Jan 15). Visit Healthcare.gov to enroll within 60 days of your qualifying life event.'
+      : 'Visit Healthcare.gov or your state exchange to compare plans. Open Enrollment runs Nov 1 – Jan 15.'
+
     nextSteps.push({
       id: 'browse_marketplace',
-      title: 'Browse marketplace plans',
-      description: 'Visit Healthcare.gov or your state exchange to compare plans. Open Enrollment runs Nov 1 – Jan 15.',
+      title: dacaStateExchange && !acaMarketplaceAccess ? 'Enroll through Covered California' : 'Browse marketplace plans',
+      description: marketplaceDescription,
       priority: eligible.includes('medicaid') ? 'medium' : 'high',
-      actionUrl: 'https://www.healthcare.gov',
+      actionUrl: dacaStateExchange && !acaMarketplaceAccess ? 'https://www.coveredca.gov' : 'https://www.healthcare.gov',
     })
   }
 

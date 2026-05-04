@@ -1,6 +1,7 @@
 'use client'
 import { useState, useMemo } from 'react'
 import { TrendingDown, Info, ChevronRight, Sparkles, FileText } from 'lucide-react'
+import TrustBanner from '@/components/ui/TrustBanner'
 import { estimateCosts, calculateSubsidy } from '@/lib/calculators/cost-estimator'
 import type { UserProfile, PlanType, CostEstimate, ParsedDocument } from '@/types'
 import CountUp from '@/components/ui/CountUp'
@@ -555,9 +556,11 @@ export default function CostEstimator({ profile, eligiblePlans, primaryRecommend
         </button>
       )}
 
-      <p className="text-xs text-gray-400 text-center pb-2">
-        All estimates are based on your profile. Actual costs depend on plan details and provider choices.
-      </p>
+      <TrustBanner
+        text="Estimates use national-average benchmark premiums and are for informational use only — not legal or insurance advice. Actual premiums vary by plan, location, and age."
+        verifyUrl="https://www.healthcare.gov"
+        verifyLabel="Compare plans on healthcare.gov →"
+      />
     </div>
   )
 }

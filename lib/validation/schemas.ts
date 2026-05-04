@@ -68,7 +68,7 @@ export const UserProfileSchema = z.object({
   expectedProcedures: z.string().max(500).optional(),
   preferredDoctors: z.string().max(500).optional(),
   monthlyPremiumBudget: z.number().min(0).optional(),
-  filingStatus: z.enum(['single', 'married_joint', 'married_separate', 'head_of_household']).optional(),
+  filingStatus: z.enum(['single', 'married_joint', 'married_separate', 'head_of_household', 'not_applicable']).optional(),
   receivingUnemploymentBenefits: z.boolean().optional(),
   unemployedMonths: z.number().int().min(0).max(24).optional(),
   zipCode: z.string().regex(/^\d{5}$/).optional(),
@@ -122,6 +122,7 @@ export const AppealAnalyzeRequestSchema = z.object({
   denialDate: z.string().min(1).max(50),
   serviceDescription: z.string().min(1).max(500),
   denialCode: z.string().max(50).optional(),
+  policyLanguage: z.string().max(2000).optional(),
   planType: z.string().max(100).optional(),
   immigrationStatus: z.string().max(100).optional(),
   state: z.string().max(2).optional(),
@@ -133,6 +134,7 @@ const DenialInfoSchema = z.object({
   denialDate: z.string().min(1).max(50),
   denialReason: z.string().min(1).max(1000),
   denialCode: z.string().max(50).optional(),
+  policyLanguage: z.string().max(2000).optional(),
 })
 
 const AnalysisResultSchema = z.object({

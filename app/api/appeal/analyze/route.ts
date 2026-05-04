@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
     if (!parsed.success) {
       return NextResponse.json({ error: 'Invalid request', details: parsed.error.issues }, { status: 400 })
     }
-    const { planName, denialReason, denialDate, serviceDescription, denialCode, planType, immigrationStatus, state } = parsed.data
+    const { planName, denialReason, denialDate, serviceDescription, denialCode, policyLanguage, planType, immigrationStatus, state } = parsed.data
 
     const message = await client.messages.create({
       model: 'claude-sonnet-4-6',
@@ -30,6 +30,7 @@ Service denied: ${serviceDescription}
 Denial date: ${denialDate}
 Denial reason: ${denialReason}
 ${denialCode ? `Denial code: ${denialCode}` : ''}
+${policyLanguage ? `Policy language cited in denial: "${policyLanguage}"` : ''}
 Plan type: ${planType ?? 'unknown'}
 User state: ${state ?? 'unknown'}
 User immigration status: ${immigrationStatus ?? 'unknown'}
@@ -38,6 +39,8 @@ ${immigrationStatus && !['us_citizen', 'green_card'].includes(immigrationStatus)
   ? 'Note: This user is on a non-ACA plan. Appeal rights may differ from ACA plans — focus on the plan\'s own appeals process and any applicable state laws.'
   : 'This is likely an ACA-compliant plan. Standard ACA appeal rights and timelines apply.'}
 
+${policyLanguage ? 'The specific policy language above was extracted from the denial document. Your analysis MUST address that language specifically — identify what it requires and how to challenge it.' : ''}
+
 Respond ONLY with this JSON structure, no markdown:
 {
   "denialType": "string — e.g. Prior Authorization Required, Medical Necessity, Out-of-Network, Coding Error, Benefit Exclusion",
@@ -45,7 +48,7 @@ Respond ONLY with this JSON structure, no markdown:
   "recommendedApproach": "1-2 sentence strategy",
   "successLikelihood": "high or medium or low",
   "supportingDocuments": ["3-5 documents to gather"],
-  "keyArguments": ["3-5 specific legal or medical arguments to make"]
+  "keyArguments": ["3-5 specific legal or medical arguments to make — cite the denial code and policy language where applicable"]
 }`,
         },
       ],

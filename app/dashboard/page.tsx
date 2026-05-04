@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import EligibilityFlowchart from '@/components/flowchart/EligibilityFlowchart'
 import EnrollmentTimeline from '@/components/timeline/EnrollmentTimeline'
+import TrustBanner from '@/components/ui/TrustBanner'
 import { PLAN_INFO } from '@/lib/dashboard/plan-info'
 import type { UserProfile, EligibilityResult, PlanType, ParsedDocument } from '@/types'
 
@@ -38,7 +39,7 @@ export default function DashboardHomePage() {
     )
   }
 
-  const primary = PLAN_INFO[eligibility.primaryRecommendation]
+  const primary = PLAN_INFO[eligibility.primaryRecommendation] ?? PLAN_INFO['none']
   const costEst = eligibility.costEstimates?.find(e => e.planType === eligibility.primaryRecommendation)
   const costLabel = costEst
     ? (costEst.estimatedMonthlyPremium.low === costEst.estimatedMonthlyPremium.high
@@ -76,6 +77,12 @@ export default function DashboardHomePage() {
           </Link>
         </div>
       </div>
+
+      <TrustBanner
+        text="For informational use only — not legal or insurance advice. Rules are based on current ACA and federal eligibility guidelines."
+        verifyUrl="https://www.healthcare.gov"
+        verifyLabel="Verify on healthcare.gov →"
+      />
 
       {/* Quick actions */}
       <div className="grid grid-cols-3 gap-3">
@@ -232,8 +239,8 @@ export default function DashboardHomePage() {
         >
           <div className="flex items-center gap-2">
             <GitBranch className="w-4 h-4 text-gray-400" />
-            <span className="text-sm font-semibold text-gray-700">Why this route?</span>
-            <span className="text-xs text-gray-400">How your eligibility was determined</span>
+            <span className="text-sm font-semibold text-gray-700">How was this decided?</span>
+            <span className="text-xs text-gray-400">See the rules behind your eligibility</span>
           </div>
           {showFlowchart ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
         </button>

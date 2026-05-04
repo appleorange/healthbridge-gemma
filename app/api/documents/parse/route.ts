@@ -74,7 +74,18 @@ export async function POST(req: Request) {
       throw new Error('No JSON found in Claude response')
     }
 
-    const result = JSON.parse(jsonMatch[0])
+    let result
+    try {
+      result = JSON.parse(jsonMatch[0])
+    } catch {
+      // Strip markdown fences and retry
+      const cleaned = jsonMatch[0].replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+      try {
+        result = JSON.parse(cleaned)
+      } catch {
+        throw new Error('Could not parse document — the file may be too complex or low quality. Try a clearer scan or a different page.')
+      }
+    }
 
     return Response.json({
       id: Date.now().toString(),

@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Shield, ChevronRight, ChevronLeft } from 'lucide-react'
 import { motion } from 'framer-motion'
-import { ONBOARDING_STEPS, US_STATES } from '@/lib/eligibility/onboarding-steps'
+import { ONBOARDING_STEPS, US_STATES, getVisibleSteps } from '@/lib/eligibility/onboarding-steps'
 import type { UserProfile } from '@/types'
 import StepTransition from '@/components/ui/StepTransition'
 import { AnimatedField } from '@/components/onboarding/AnimatedField'
@@ -23,8 +23,9 @@ export default function OnboardingPage() {
   const [loading, setLoading] = useState(false)
   const [direction, setDirection] = useState<'forward' | 'backward'>('forward')
 
-  const step = ONBOARDING_STEPS[currentStep]
-  const isLast = currentStep === ONBOARDING_STEPS.length - 1
+  const visibleSteps = getVisibleSteps(profile as Record<string, unknown>)
+  const step = visibleSteps[currentStep] ?? ONBOARDING_STEPS[currentStep]
+  const isLast = currentStep === visibleSteps.length - 1
 
   // Filter fields based on showWhen conditions
   const visibleFields = step.fields.filter(field => {
@@ -107,7 +108,7 @@ export default function OnboardingPage() {
       {/* Animated stepper */}
       <div className="bg-white border-b border-gray-100 px-6 py-3">
         <div className="flex items-center gap-2 max-w-lg mx-auto">
-          {ONBOARDING_STEPS.map((s, i) => {
+          {visibleSteps.map((s, i) => {
             const isCompleted = i < currentStep
             const isCurrent = i === currentStep
             return (
@@ -134,7 +135,7 @@ export default function OnboardingPage() {
                     </span>
                   )}
                 </motion.div>
-                {i < ONBOARDING_STEPS.length - 1 && (
+                {i < visibleSteps.length - 1 && (
                   <motion.div
                     className="h-0.5 flex-1 rounded-full"
                     animate={{ backgroundColor: isCompleted ? '#588157' : '#dad7cd' }}
@@ -153,7 +154,7 @@ export default function OnboardingPage() {
           <StepTransition stepKey={currentStep} direction={direction}>
           {/* Step counter */}
           <p className="text-sm text-gray-400 mb-2">
-            Step {currentStep + 1} of {ONBOARDING_STEPS.length}
+            Step {currentStep + 1} of {visibleSteps.length}
           </p>
 
           <h1 className="text-2xl font-bold text-gray-900 mb-2">{step.title}</h1>

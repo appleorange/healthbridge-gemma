@@ -1,6 +1,11 @@
 import type { UserProfile, PlanType, CostEstimate } from '@/types'
 import { matchEmployerPlans, KNOWN_EMPLOYER_PLANS } from '@/lib/plans/plan-finder'
 import { getFPLPercent } from '@/lib/constants/fpl'
+import {
+  APTC_ELIGIBLE_STATUSES,
+  FEDERAL_MEDICAID_STATUSES,
+  ACA_EXPANSION_STATES,
+} from '@/lib/eligibility/rules'
 
 export function getFPL(income: number, householdSize: number): number {
   return getFPLPercent(income, householdSize)
@@ -24,32 +29,31 @@ export function calculateSubsidy(profile: UserProfile): SubsidyResult {
   const fpl = getFPL(profile.annualIncome, profile.householdSize)
   const notes: string[] = []
 
-  const acaEligibleStatuses = ['us_citizen', 'green_card', 'refugee_asylee', 'l1', 'o1', 'tn']
-  const isACAEligible = acaEligibleStatuses.includes(profile.immigrationStatus)
+  // Use the same eligibility constants as the engine so cost estimates stay consistent.
+  // APTC_ELIGIBLE_STATUSES includes H-1B, H-4, F-1, J-1, etc. (lawfully present non-immigrants).
+  // FEDERAL_MEDICAID_STATUSES is narrower: citizen, LPR, refugee/asylee, parolee only.
+  const isAptcEligible = APTC_ELIGIBLE_STATUSES.includes(profile.immigrationStatus)
+  const isMedicaidStatusEligible = FEDERAL_MEDICAID_STATUSES.includes(profile.immigrationStatus)
   const hasAffordableEmployerPlan = profile.hasEmployerInsurance === true &&
     ['employed_fulltime', 'employed_parttime'].includes(profile.employmentStatus)
 
-  const MEDICAID_EXPANSION_STATES = [
-    'AK','AZ','AR','CA','CO','CT','DC','DE','HI','ID','IL','IN','IA',
-    'KS','KY','LA','ME','MD','MA','MI','MN','MO','MT','NE','NV','NH',
-    'NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SD','UT','VT',
-    'VA','WA','WV','WI',
-  ]
-  const inExpansionState = MEDICAID_EXPANSION_STATES.includes(profile.state)
-  const medicaidEligible = isACAEligible && fpl < 138 && inExpansionState
+  const inExpansionState = ACA_EXPANSION_STATES.includes(profile.state)
+  const medicaidEligible = isMedicaidStatusEligible && fpl < 138 && inExpansionState
 
   if (medicaidEligible) {
     notes.push('At your income level you likely qualify for Medicaid — which has $0 premium and minimal cost-sharing. Apply before exploring marketplace plans.')
   }
 
-  const chipEligible = profile.hasDependents && fpl < 200 && isACAEligible
+  const chipEligible = profile.hasDependents && fpl < 200 && isAptcEligible
   if (chipEligible) notes.push("Your children may qualify for CHIP — low-cost coverage for kids in families that earn too much for Medicaid.")
 
-  const qualifiesForPTC = isACAEligible && fpl >= 100 && fpl <= 400 && !hasAffordableEmployerPlan && !medicaidEligible
+  const qualifiesForPTC = isAptcEligible && fpl >= 100 && fpl <= 400 && !hasAffordableEmployerPlan && !medicaidEligible
 
+  // Required contribution caps per IRA-enhanced 2026 plan year schedule.
+  // Source: IRS Rev. Proc. 2024-35; KFF 2025 subsidy calculator reference.
   let requiredContributionPct = 0
   if (fpl < 150) requiredContributionPct = 0
-  else if (fpl < 200) requiredContributionPct = 3.0
+  else if (fpl < 200) requiredContributionPct = 2.0  // IRA-enhanced cap at 200% FPL (was 3.0% = original ACA rate)
   else if (fpl < 250) requiredContributionPct = 4.0
   else if (fpl < 300) requiredContributionPct = 6.0
   else requiredContributionPct = 8.5
@@ -73,11 +77,11 @@ export function calculateSubsidy(profile: UserProfile): SubsidyResult {
     notes.push(`At ${Math.round(fpl)}% FPL you qualify for Premium Tax Credits. These reduce your monthly premium — apply the credit when you enroll on Healthcare.gov or your state exchange.`)
   }
 
-  if (!isACAEligible) {
+  if (!isAptcEligible) {
     notes.push('Your immigration status does not qualify for ACA marketplace subsidies. School plans, ISPs, and employer plans are your main options.')
   }
 
-  if (fpl > 400 && isACAEligible) {
+  if (fpl > 400 && isAptcEligible) {
     notes.push('Your income exceeds 400% FPL — you do not qualify for Premium Tax Credits, but you can still purchase unsubsidized marketplace plans with strong consumer protections.')
   }
 

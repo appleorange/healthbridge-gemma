@@ -30,21 +30,23 @@ Service denied: ${denialInfo.serviceDescription}
 Date of denial: ${denialInfo.denialDate}
 Denial reason: ${denialInfo.denialReason}
 ${denialInfo.denialCode ? `Denial code: ${denialInfo.denialCode}` : ''}
+${denialInfo.policyLanguage ? `Policy language cited in denial: "${denialInfo.policyLanguage}"` : ''}
 Denial type: ${analysis.denialType}
 State: ${state ?? 'unknown'}
 ${age ? `Patient age: ${age}` : ''}
 
 Appeal grounds to use: ${analysis.keyArguments.join('; ')}
 
-Write a professional appeal letter under 400 words that includes:
-1. Clear statement of what is being appealed and the denial date
+Write a professional appeal letter under 450 words that includes:
+1. Clear statement of what is being appealed, the denial date${denialInfo.denialCode ? `, and the denial code (${denialInfo.denialCode})` : ''}
 2. Statement that this is a formal first-level internal appeal
 3. Specific grounds for appeal using the grounds listed above
-4. Request for the specific clinical criteria used in the denial (this is a legal right under ERISA and ACA)
-5. Statement of intent to pursue external independent review if internal appeal is denied
-6. Clear request for written response within the legally required timeframe (30 days for standard, 72 hours for urgent care)
+${denialInfo.policyLanguage ? `4. Direct challenge to the specific policy language cited in the denial — quote it exactly and explain why it does not apply or was applied incorrectly` : `4. Request for the specific clinical criteria used in the denial (this is a legal right under ERISA and ACA)`}
+5. Request for the complete medical criteria and guidelines used in the decision
+6. Statement of intent to pursue external independent review if internal appeal is denied
+7. Clear request for written response within the legally required timeframe (30 days for standard, 72 hours for urgent care)
 
-Do not include any placeholder text in brackets. Use the actual plan name, service, and dates provided.`,
+Do not include any placeholder text in brackets. Use the actual plan name, service, dates, and any specific policy language provided above.`,
       },
     ],
   })
