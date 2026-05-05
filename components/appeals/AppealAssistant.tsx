@@ -382,7 +382,7 @@ export default function AppealAssistant({ userProfile, eligibilityResult }: Prop
         <div>
           <p className="text-xs font-semibold text-gray-500 mb-2">Appealable issues</p>
           <div className="space-y-1.5">
-            {analysis.appealableIssues.map((issue, i) => (
+            {(analysis.appealableIssues ?? []).map((issue, i) => (
               <div key={i} className="flex items-start gap-2 p-2.5 bg-brand-50 border border-brand-100 rounded-xl">
                 <CheckCircle className="w-3.5 h-3.5 text-brand-500 flex-shrink-0 mt-0.5" />
                 <p className="text-xs text-brand-800">{issue}</p>
@@ -394,7 +394,7 @@ export default function AppealAssistant({ userProfile, eligibilityResult }: Prop
         <div>
           <p className="text-xs font-semibold text-gray-500 mb-2">Key arguments for your letter</p>
           <div className="space-y-1.5">
-            {analysis.keyArguments.map((arg, i) => (
+            {(analysis.keyArguments ?? []).map((arg, i) => (
               <div key={i} className="flex items-start gap-2">
                 <span className="text-xs font-bold text-brand-600 flex-shrink-0 mt-0.5">{i + 1}.</span>
                 <p className="text-xs text-gray-700">{arg}</p>
@@ -406,7 +406,7 @@ export default function AppealAssistant({ userProfile, eligibilityResult }: Prop
         <div>
           <p className="text-xs font-semibold text-gray-500 mb-2">Documents to gather</p>
           <div className="flex flex-wrap gap-1.5">
-            {analysis.supportingDocuments.map((doc, i) => (
+            {(analysis.supportingDocuments ?? []).map((doc, i) => (
               <span key={i} className="text-xs bg-purple-50 text-purple-700 border border-purple-200 px-2.5 py-1 rounded-full">
                 {doc}
               </span>

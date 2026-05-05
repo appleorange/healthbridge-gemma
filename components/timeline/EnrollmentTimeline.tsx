@@ -21,7 +21,7 @@ function generateEvents(profile: UserProfile, eligibilityResult: EligibilityResu
   const todayStr = today.toISOString().split('T')[0]
   const year = today.getFullYear()
   const primary = eligibilityResult.primaryRecommendation
-  const eligible = eligibilityResult.eligiblePlans
+  const eligible = eligibilityResult.eligiblePlans ?? []
 
   // Open Enrollment window (Nov 1 – Jan 15)
   const oeStart = new Date(`${year}-11-01`)

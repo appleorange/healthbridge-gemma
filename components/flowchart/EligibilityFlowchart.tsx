@@ -227,13 +227,13 @@ function TreeNode({ nodeId, nodeMap, edgeLabelMap, selected, onSelect, depth = 0
 export default function EligibilityFlowchart({ nodes, edges, profile }: Props) {
   const [selected, setSelected] = useState<FlowchartNode | null>(null)
 
-  if (!nodes.length) return null
+  if (!nodes?.length) return null
 
   const nodeMap = new Map(nodes.map(n => [n.id, n]))
 
   // Build incoming edge label map: nodeId → edge label from parent
-  const edgeLabelMap = new Map<string, string>()
-  edges.forEach(e => {
+  const edgeLabelMap = new Map<string, string>();
+  (edges ?? []).forEach(e => {
     if (e.label) edgeLabelMap.set(e.to, e.label)
   })
 

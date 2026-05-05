@@ -5,13 +5,14 @@ import Link from 'next/link'
 import {
   Shield, CheckCircle, AlertCircle, Clock, ChevronRight,
   Compass, Wrench, HelpCircle, Sparkles, GitBranch,
-  Calendar, ChevronDown, ChevronUp, MessageCircle, FileText, Scale
+  Calendar, ChevronDown, ChevronUp, MessageCircle, FileText, Scale, ListChecks
 } from 'lucide-react'
 import EligibilityFlowchart from '@/components/flowchart/EligibilityFlowchart'
 import EnrollmentTimeline from '@/components/timeline/EnrollmentTimeline'
+import ActionChecklist from '@/components/checklist/ActionChecklist'
 import TrustBanner from '@/components/ui/TrustBanner'
 import { PLAN_INFO } from '@/lib/dashboard/plan-info'
-import type { UserProfile, EligibilityResult, PlanType, ParsedDocument } from '@/types'
+import type { UserProfile, EligibilityResult, PlanType, ParsedDocument, ChecklistItem } from '@/types'
 
 export default function DashboardHomePage() {
   const router = useRouter()
@@ -21,14 +22,42 @@ export default function DashboardHomePage() {
   const [showFlowchart, setShowFlowchart] = useState(false)
   const [showTimeline, setShowTimeline] = useState(false)
   const [documents, setDocuments] = useState<ParsedDocument[]>([])
+  const [checklist, setChecklist] = useState<ChecklistItem[] | null>(null)
+  const [checklistLoading, setChecklistLoading] = useState(false)
 
   useEffect(() => {
-    const p = sessionStorage.getItem('hb_profile')
-    const e = sessionStorage.getItem('hb_eligibility')
-    if (!p || !e) { router.push('/onboarding'); return }
-    setProfile(JSON.parse(p))
-    setEligibility(JSON.parse(e))
-    try { setDocuments(JSON.parse(sessionStorage.getItem('hb_documents') ?? '[]')) } catch {}
+    let parsedProfile: UserProfile
+    let parsedEligibility: EligibilityResult
+    try {
+      const p = sessionStorage.getItem('hb_profile')
+      const e = sessionStorage.getItem('hb_eligibility')
+      if (!p || !e) { router.push('/onboarding'); return }
+      parsedProfile = JSON.parse(p) as UserProfile
+      parsedEligibility = JSON.parse(e) as EligibilityResult
+      setProfile(parsedProfile)
+      setEligibility(parsedEligibility)
+      try { setDocuments(JSON.parse(sessionStorage.getItem('hb_documents') ?? '[]')) } catch {}
+    } catch { router.push('/onboarding'); return }
+
+    const cached = sessionStorage.getItem('hb_checklist')
+    if (cached) {
+      try { setChecklist(JSON.parse(cached)); return } catch {}
+    }
+    setChecklistLoading(true)
+    fetch('/api/checklist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ profile: parsedProfile, eligibility: parsedEligibility }),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data.items)) {
+          setChecklist(data.items)
+          sessionStorage.setItem('hb_checklist', JSON.stringify(data.items))
+        }
+      })
+      .catch(() => {})
+      .finally(() => setChecklistLoading(false))
   }, [router])
 
   if (!profile || !eligibility) {
@@ -46,7 +75,7 @@ export default function DashboardHomePage() {
         ? `$${costEst.estimatedMonthlyPremium.low}`
         : `$${costEst.estimatedMonthlyPremium.low}–$${costEst.estimatedMonthlyPremium.high}`)
     : null
-  const docDeadlines = documents.flatMap(d => d.deadlines.map(dl => ({ ...dl, fileName: d.fileName })))
+  const docDeadlines = documents.flatMap(d => (d.deadlines ?? []).map(dl => ({ ...dl, fileName: d.fileName })))
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-8 space-y-6 w-full">
@@ -62,8 +91,10 @@ export default function DashboardHomePage() {
             </span>
           )}
         </div>
-        {eligibility.bestOptionReasoning && (
-          <p className="text-brand-100 text-sm leading-relaxed mb-4">{eligibility.bestOptionReasoning}</p>
+        {(eligibility.visaEligibilitySummary || eligibility.bestOptionReasoning) && (
+          <p className="text-brand-100 text-sm leading-relaxed mb-4">
+            {eligibility.visaEligibilitySummary || eligibility.bestOptionReasoning}
+          </p>
         )}
         <div className="flex gap-2 flex-wrap">
           <Link href="/dashboard/explore" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-white text-xs font-medium transition-all border border-white/20">
@@ -83,6 +114,21 @@ export default function DashboardHomePage() {
         verifyUrl="https://www.healthcare.gov"
         verifyLabel="Verify on healthcare.gov →"
       />
+
+      {/* Action checklist */}
+      <section>
+        <div className="flex items-center gap-2 mb-3">
+          <ListChecks className="w-4 h-4 text-gray-400" />
+          <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Your action checklist</h3>
+        </div>
+        {checklistLoading && (
+          <div className="flex items-center gap-2 p-4 bg-white border border-gray-100 rounded-xl text-sm text-gray-400">
+            <div className="w-4 h-4 border-2 border-brand-400 border-t-transparent rounded-full animate-spin shrink-0" />
+            Generating your personalized checklist…
+          </div>
+        )}
+        {checklist && checklist.length > 0 && <ActionChecklist items={checklist} />}
+      </section>
 
       {/* Quick actions */}
       <div className="grid grid-cols-3 gap-3">
@@ -107,10 +153,10 @@ export default function DashboardHomePage() {
       {/* Eligible plans */}
       <section>
         <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-          Plans you qualify for ({eligibility.eligiblePlans.length})
+          Plans you qualify for ({eligibility.eligiblePlans?.length ?? 0})
         </h3>
         <div className="space-y-2">
-          {eligibility.eligiblePlans.map(plan => {
+          {(eligibility.eligiblePlans ?? []).map(plan => {
             const info = PLAN_INFO[plan]
             const isPrimary = plan === eligibility.primaryRecommendation
             const isExpanded = expandedPlan === plan
@@ -164,11 +210,11 @@ export default function DashboardHomePage() {
       </section>
 
       {/* Special circumstances */}
-      {eligibility.specialCircumstances.length > 0 && (
+      {(eligibility.specialCircumstances?.length ?? 0) > 0 && (
         <section>
           <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Important notes</h3>
           <div className="space-y-2">
-            {eligibility.specialCircumstances.map((note, i) => (
+            {(eligibility.specialCircumstances ?? []).map((note, i) => (
               <div key={i} className="flex gap-3 p-3 bg-amber-50 border border-amber-100 rounded-xl">
                 <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                 <p className="text-sm text-amber-800">{note}</p>
@@ -179,11 +225,11 @@ export default function DashboardHomePage() {
       )}
 
       {/* Next steps */}
-      {eligibility.nextSteps.length > 0 && (
+      {(eligibility.nextSteps?.length ?? 0) > 0 && (
         <section>
           <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Next steps</h3>
           <div className="space-y-2">
-            {eligibility.nextSteps.map(step => (
+            {(eligibility.nextSteps ?? []).map(step => (
               <div key={step.id} className="flex items-start gap-3 p-4 bg-white border border-gray-100 rounded-xl">
                 <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
                   step.priority === 'high' ? 'bg-red-100' : 'bg-gray-100'
@@ -280,13 +326,13 @@ export default function DashboardHomePage() {
       </section>
 
       {/* Ineligible plans */}
-      {eligibility.ineligiblePlans.length > 0 && (
+      {(eligibility.ineligiblePlans?.length ?? 0) > 0 && (
         <section className="pb-8">
           <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
             Plans you don&apos;t qualify for
           </h3>
           <div className="flex flex-wrap gap-2">
-            {eligibility.ineligiblePlans.map(plan => (
+            {(eligibility.ineligiblePlans ?? []).map(plan => (
               <span key={plan} className="text-xs text-gray-400 bg-gray-100 px-3 py-1.5 rounded-full line-through">
                 {PLAN_INFO[plan].label}
               </span>

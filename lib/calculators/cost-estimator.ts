@@ -306,7 +306,7 @@ export function estimateCosts(profile: UserProfile, eligiblePlans: PlanType[]): 
   const fpl = getFPL(profile.annualIncome, profile.householdSize)
   const estimates: CostEstimate[] = []
 
-  for (const plan of eligiblePlans) {
+  for (const plan of (eligiblePlans ?? [])) {
     // ── Employer: potentially expand to per-plan entries ──
     if (plan === 'employer_sponsored') {
       estimates.push(...buildEmployerEstimates(profile, subsidy))

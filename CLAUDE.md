@@ -66,6 +66,44 @@ The class of bug to prevent: TypeScript types and Zod schemas drift apart silent
 
 **When in doubt, ask:** "Is there a runtime boundary (API route, sessionStorage parse, external input) where this value will be validated separately from the type?" If yes, update that boundary too.
 
+## Subagent Strategy
+
+- Use subagents liberally to keep the main context window clean
+- Offload research, exploration, and parallel analysis to subagents
+- For complex problems, throw more compute at it via parallel subagents
+- One focused task per subagent — never multiplex unrelated work into one
+
+## Autonomous Bug Fixing
+
+When given a bug report: just fix it. No hand-holding required from the user.
+- Read the error, trace it to the root cause, fix it
+- Point at logs, errors, and failing tests — then resolve them
+- Zero context switching required from the user
+- If CI is failing, go fix the failing tests without being asked how
+
+## Verification Before Done
+
+Never mark a task complete without proving it works:
+- Run `npm run build` and check for errors
+- Diff behavior between main and your changes when relevant
+- Ask: "would a staff engineer approve this?"
+- Run tests, check logs, demonstrate correctness — don't just say it works
+
+## Self-Improvement Loop
+
+After any correction from the user:
+1. **Identify the pattern** — what class of mistake was it? (e.g. missing null guard, stale cache assumption, missing semicolon causing parse ambiguity)
+2. **Write a rule** — add it to the relevant section of this file or to `Things to Never Do` below so future sessions don't repeat it
+3. **Scan for siblings** — before closing, grep the codebase for other instances of the same mistake and fix them proactively
+4. **Review at session start** — re-read this file at the start of every session and apply any lessons that are relevant to the work at hand
+
+### Lessons learned
+
+- **sessionStorage shape changes cause silent runtime crashes** — whenever `EligibilityResult` or any stored type gains or loses a field, add a validator at the read boundary (e.g. Sidebar) that detects old shape and clears + redirects. Never assume stored data matches the current type.
+- **Defensive array access on data from sessionStorage** — always default arrays read from sessionStorage to `[]` (`parsed?.field ?? []`) before calling `.length`, `.map()`, `.includes()`, `.forEach()`. TypeScript types don't protect runtime data.
+- **Missing semicolon before a line starting with `(`** — ASI does not insert a semicolon before `(`, so `const x = new Foo()\n(something).method()` is parsed as `new Foo()(something).method()`. Always add `;` when the next line starts with `(`, `[`, or a template literal.
+- **When fixing one crash, scan for siblings** — if a field is undefined in one component, it will be undefined in every component that reads it. Grep for all usages before stopping.
+
 ## Things to Never Do
 - Never add a database, ORM, or user auth without explicit discussion
 - Never commit secrets or `.env.local`

@@ -100,7 +100,7 @@ export default function ExplorePage() {
     )
   }
 
-  const primary = PLAN_INFO[eligibility.primaryRecommendation]
+  const primary = PLAN_INFO[eligibility.primaryRecommendation] ?? PLAN_INFO['none']
   const compareCards = planCards.filter(p => compareList.includes(p.id))
 
   return (

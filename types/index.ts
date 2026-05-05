@@ -190,6 +190,7 @@ export interface EligibilityResult {
   ineligiblePlans: PlanType[]
   primaryRecommendation: PlanType
   bestOptionReasoning: string
+  visaEligibilitySummary?: string
   subsidyEligible: boolean
   estimatedSubsidy?: number
   subsidyDetails?: SubsidyDetails
@@ -207,6 +208,16 @@ export interface NextStep {
   deadline?: string
   priority: 'high' | 'medium' | 'low'
   actionUrl?: string
+}
+
+export interface ChecklistItem {
+  id: string
+  category: 'document' | 'call' | 'action' | 'deadline'
+  title: string
+  detail: string
+  urgent?: boolean
+  link?: string
+  linkLabel?: string
 }
 
 export interface FlowchartNode {

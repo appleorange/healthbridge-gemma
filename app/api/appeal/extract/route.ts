@@ -46,11 +46,21 @@ export async function POST(req: NextRequest) {
       messages: [{ role: 'user', content }],
     })
 
-    const text = response.content[0].type === 'text' ? response.content[0].text : ''
-    const jsonMatch = text.match(/\{[\s\S]*\}/)
+    const block = response.content?.[0]
+    if (!block || block.type !== 'text') throw new Error('Claude returned no text content')
+
+    const jsonMatch = block.text.match(/\{[\s\S]*\}/)
     if (!jsonMatch) throw new Error('No JSON found in response')
 
-    const result = JSON.parse(jsonMatch[0])
+    const raw = JSON.parse(jsonMatch[0])
+    const result = {
+      planName: typeof raw.planName === 'string' ? raw.planName : null,
+      denialCode: typeof raw.denialCode === 'string' ? raw.denialCode : null,
+      denialReason: typeof raw.denialReason === 'string' ? raw.denialReason : null,
+      serviceDescription: typeof raw.serviceDescription === 'string' ? raw.serviceDescription : null,
+      denialDate: typeof raw.denialDate === 'string' ? raw.denialDate : null,
+      policyLanguage: typeof raw.policyLanguage === 'string' ? raw.policyLanguage : null,
+    }
     return Response.json(result)
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : String(error)

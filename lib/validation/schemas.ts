@@ -150,6 +150,17 @@ export const AppealDraftRequestSchema = z.object({
   age: z.number().int().min(0).max(130).optional(),
 })
 
+export const ChecklistRequestSchema = z.object({
+  profile: UserProfileSchema,
+  eligibility: z.object({
+    primaryRecommendation: PlanTypeSchema,
+    eligiblePlans: z.array(PlanTypeSchema),
+    bestOptionReasoning: z.string().max(2000).optional(),
+    subsidyEligible: z.boolean().optional(),
+    specialCircumstances: z.array(z.string().max(500)).max(20).optional(),
+  }).passthrough(),
+})
+
 export const TimelineRequestSchema = z.object({
   profile: UserProfileSchema,
   eligibilityResult: z.object({

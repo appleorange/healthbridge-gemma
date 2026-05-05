@@ -122,7 +122,7 @@ export default function CostEstimator({ profile, eligiblePlans, primaryRecommend
   )
   const [rxPerMonth, setRxPerMonth] = useState(numRx)
 
-  const estimates = useMemo(() => estimateCosts(profile, eligiblePlans), [profile, eligiblePlans])
+  const estimates = useMemo(() => estimateCosts(profile, eligiblePlans ?? []), [profile, eligiblePlans])
   const subsidy = useMemo(() => calculateSubsidy(profile), [profile])
 
   const primaryEst: CostEstimate | undefined = useMemo(() => {
@@ -131,7 +131,7 @@ export default function CostEstimator({ profile, eligiblePlans, primaryRecommend
   }, [estimates, primaryRecommendation])
 
   const isACARecommended = primaryRecommendation === 'aca_marketplace'
-  const isACAEligible = eligiblePlans.includes('aca_marketplace')
+  const isACAEligible = (eligiblePlans ?? []).includes('aca_marketplace')
 
   // Receipt breakdown data
   const creditPerMonth = Math.round((primaryEst?.subsidyApplied ?? 0) / 12)

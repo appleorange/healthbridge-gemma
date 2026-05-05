@@ -1,9 +1,16 @@
 'use client'
-import { memo, useState } from 'react'
+import { memo, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Shield, Home, Compass, Wrench, HelpCircle, RotateCcw, Menu, X } from 'lucide-react'
+
+const STALE_KEYS = ['hb_eligibility', 'hb_profile', 'hb_plan_cards', 'hb_plans_fetched', 'hb_compare_list', 'hb_chat_messages', 'hb_message_count', 'hb_doc_count', 'hb_appeal_count', 'hb_documents']
+
+function clearAndRedirect(router: ReturnType<typeof useRouter>) {
+  STALE_KEYS.forEach(k => sessionStorage.removeItem(k))
+  router.push('/onboarding')
+}
 
 const NAV_ITEMS = [
   { href: '/dashboard', icon: Home, label: 'Home' },
@@ -72,6 +79,20 @@ function NavContent({ onLinkClick }: { onLinkClick?: () => void }) {
 
 export const Sidebar = memo(function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const router = useRouter()
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('hb_eligibility')
+      if (!raw) return
+      const parsed = JSON.parse(raw)
+      if (!Array.isArray(parsed?.eligiblePlans)) {
+        clearAndRedirect(router)
+      }
+    } catch {
+      clearAndRedirect(router)
+    }
+  }, [router])
 
   return (
     <>

@@ -67,8 +67,8 @@ Simulated pass completed (2026-05-01): 5 personas (F-1 student, H-1B, undocument
 ### Task 1 — Restructure the appeal assistant `✅ done`
 Added document upload (JPEG/PNG/PDF) to the appeal entry step. New `/api/appeal/extract` route uses Claude vision to extract denial code, verbatim denial reason, service description, denial date, and — critically — the specific policy language cited in the denial. Extracted fields pre-fill the form (user can still edit). The analyze route now instructs Claude to address the specific policy language; the draft route instructs Claude to quote it directly in the letter rather than using boilerplate. Policy language is surfaced as a read-only field so users can see what was found.
 
-### Task 2 — Add a concrete action checklist per user `todo`
-After the eligibility recommendation, generate a per-user checklist: who to call, what documents to bring, what to say, deadlines specific to their situation and state. This is more useful than a generic enrollment timeline.
+### Task 2 — Add a concrete action checklist per user `✅ done`
+Claude-generated per-user checklist: documents to gather, who to contact, actions to take, deadlines — all specific to the user's immigration status, state, and recommended plan. Renders on the dashboard home page below the trust banner. Cached in `hb_checklist` sessionStorage so it only generates once per session. API route at `/api/checklist` with Zod validation.
 
 ### Task 3 — Add Zod validation to all API routes `✅ done`
 Installed Zod. Created `lib/validation/schemas.ts` with `UserProfileSchema` + 7 per-route schemas. All 8 API routes now validate at the POST boundary before passing to business logic. Added missing try/catch to `appeal/draft`.
@@ -76,8 +76,8 @@ Installed Zod. Created `lib/validation/schemas.ts` with `UserProfileSchema` + 7 
 ### Task 4 — Basic Spanish language support `todo`
 Add Spanish as a language option starting with the onboarding flow and eligibility results screens. Users are often not native English speakers. Use Claude to handle translations where needed.
 
-### Task 5 — Sharpen visa × eligibility output `todo`
-The eligibility result for each immigration status should be in plain language with zero jargon, specific to that visa type, and clearly explain what the user can and cannot do. This is HealthBridge's core differentiator — it should feel meaningfully better than anything else available.
+### Task 5 — Sharpen visa × eligibility output `✅ done`
+The eligibility API route now calls Claude after the engine runs to generate a `visaEligibilitySummary` — 2–4 sentences in plain language, specific to the user's visa type, explaining exactly what they can and cannot access and why. Displayed in the recommendation banner on the dashboard home, falling back to `bestOptionReasoning` if unavailable. Generated once at onboarding time, stored in sessionStorage.
 
 ---
 
@@ -117,3 +117,5 @@ Items that emerged during work but don't map to a Phase 1/2 task. Review before 
 | 2026-04-28 | Phase 1 · Task 3 | → done | 10-scenario verification matrix; 2 bugs fixed in `calculateSubsidy` (H-1B/H-4/J-1 missing from APTC check; 150-200% FPL rate 3%→2%); MEDICAID_EXPANSION_STATES deduped |
 | 2026-04-29 | Phase 1 · Task 4 | → done | `TrustBanner` component; added to dashboard home, flowchart, cost estimator, chat, appeal assistant |
 | 2026-05-03 | Phase 2 · Task 1 | → done | `/api/appeal/extract` route; doc upload pre-fills form; policy language extracted, surfaced, and quoted in letter |
+| 2026-05-03 | Phase 2 · Task 2 | → done | `/api/checklist` route; Claude-generated per-user action checklist; `ChecklistItem` type + Zod schema; `ActionChecklist` component; cached in sessionStorage |
+| 2026-05-03 | Phase 2 · Task 5 | → done | `visaEligibilitySummary` field on `EligibilityResult`; Claude call in eligibility route post-engine; plain-language visa-specific narrative on dashboard banner |
