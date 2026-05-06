@@ -1,10 +1,8 @@
 export const runtime = 'nodejs'
 
-import Anthropic from '@anthropic-ai/sdk'
+import { anthropic as client } from '@/lib/api/anthropic'
 import { ChecklistRequestSchema } from '@/lib/validation/schemas'
 import type { ChecklistItem } from '@/types'
-
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 const PLAN_LABEL: Record<string, string> = {
   medicaid: 'Medicaid',

@@ -32,6 +32,12 @@ function buildBestOptionReasoning(
       }
       break
 
+    case 'chip':
+      parts.push('CHIP (Children\'s Health Insurance Program) provides low-cost, comprehensive coverage for your children — doctor visits, dental, vision, prescriptions, and emergency care.')
+      parts.push('Your children\'s eligibility is based on their own immigration status (US citizen or green card), not yours. Your immigration status does not affect their access to CHIP.')
+      parts.push('Apply through Healthcare.gov or your state\'s CHIP office. Bring birth certificates or immigration documents for your children.')
+      break
+
     case 'medicaid':
       parts.push('Medicaid is your strongest option — it\'s free or nearly free government coverage with comprehensive benefits.')
       if (profile.expectedHealthcareUsage === 'high') {
@@ -403,6 +409,56 @@ export function calculateEligibility(profile: UserProfile): EligibilityResult {
     )
   }
 
+  // ── CHIP — Children's Health Insurance Program ──
+  // US-citizen and LPR children qualify for CHIP regardless of parent's immigration status.
+  // This is the key mixed-status family scenario: undocumented/DACA/TPS parent + citizen child.
+  // Income threshold: ~200% FPL federally; many states go to 300%+ (VERIFY: per-state table).
+  // Source: NILC "Health Coverage for Immigrants" guide; CMS CHIP state eligibility data.
+  const chipIncomeThreshold = 200 // % FPL — conservative federal floor; states often higher
+  const chipIncomeEligible = fplPct <= chipIncomeThreshold
+  const chipEligible = (profile.dependentsHaveUSCitizenChild === true) && chipIncomeEligible
+
+  if (profile.hasDependents && profile.dependentsHaveUSCitizenChild) {
+    if (chipEligible) {
+      eligible.push('chip')
+      addNode({
+        id: 'chip_result',
+        label: 'CHIP',
+        subtitle: 'For your US-citizen or green card children',
+        type: 'result',
+        status: 'eligible',
+        explanation: `Your children who are US citizens or green card holders can qualify for CHIP regardless of your immigration status. CHIP covers children up to age 19 in households earning up to ~200% FPL (${Math.round(fplPct)}% FPL in your case). Coverage is comprehensive — doctor visits, dental, vision, prescriptions, and emergency care at low or no cost.`,
+        legalBasis: '42 USC § 1397bb; Social Security Act § 2112 — child citizenship is the qualifying criterion, not parent immigration status',
+        profileData: `Has US-citizen/LPR children + income ${Math.round(fplPct)}% FPL ≤ ${chipIncomeThreshold}% threshold → CHIP eligible`,
+        whatWouldChange: 'Your children\'s coverage is independent of your own immigration status. Apply through your state\'s CHIP program or Healthcare.gov — bring your children\'s birth certificates or immigration documents.',
+      }, 'start', 'CHIP check')
+      nextSteps.push({
+        id: 'apply_chip',
+        title: 'Apply for CHIP for your children',
+        description: 'Your US-citizen or green card children qualify for CHIP regardless of your immigration status. Apply through Healthcare.gov or your state\'s CHIP office. Bring your children\'s birth certificates or green cards.',
+        priority: 'high',
+        actionUrl: 'https://www.healthcare.gov/medicaid-chip/childrens-health-insurance-program/',
+      })
+      circumstances.push(
+        `CHIP for your children: Even though your own coverage options may be limited, your US-citizen or green card children are eligible for CHIP — a low-cost, comprehensive program. Your immigration status does not affect their eligibility. Apply at Healthcare.gov or your state CHIP office.`
+      )
+    } else {
+      const baseFPL = FPL_BASE[Math.min(profile.householdSize, 8)] ?? 54150
+      const chipIncomeLimit = Math.round(baseFPL * chipIncomeThreshold / 100)
+      addNode({
+        id: 'chip_result',
+        label: 'CHIP',
+        subtitle: `${Math.round(fplPct)}% FPL — limit is ${chipIncomeThreshold}%`,
+        type: 'result',
+        status: 'ineligible',
+        explanation: `Your income (${Math.round(fplPct)}% FPL) exceeds the standard CHIP income limit of ${chipIncomeThreshold}% FPL ($${chipIncomeLimit.toLocaleString()}/yr for a household of ${profile.householdSize}). However, many states extend CHIP to higher income levels — check your state's specific threshold, as it may be 300–400% FPL.`,
+        legalBasis: '42 USC § 1397bb; state CHIP plans vary',
+        whatWouldChange: `Check your state's CHIP income limit — many states cover children up to 300–400% FPL. Visit your state's CHIP page via Healthcare.gov.`,
+        profileData: `Income ${Math.round(fplPct)}% FPL > ${chipIncomeThreshold}% federal floor — verify state-specific threshold`,
+      }, 'start', 'CHIP check')
+    }
+  }
+
   // ── Employer-sponsored ──
   if (profile.hasEmployerInsurance) {
     eligible.push('employer_sponsored')
@@ -547,7 +603,7 @@ export function calculateEligibility(profile: UserProfile): EligibilityResult {
   // Only surfaced when the user has no access to marketplace, medicaid, employer, school, or medicare.
   // Previously shown too broadly alongside comprehensive options; tightened here.
   const hasComprehensiveOption = eligible.some(p =>
-    ['medicare', 'medicaid', 'employer_sponsored', 'aca_marketplace', 'school_plan', 'international_student_plan'].includes(p)
+    ['medicare', 'medicaid', 'chip', 'employer_sponsored', 'aca_marketplace', 'school_plan', 'international_student_plan'].includes(p)
   )
   if (!hasComprehensiveOption) {
     eligible.push('short_term')
@@ -566,7 +622,7 @@ export function calculateEligibility(profile: UserProfile): EligibilityResult {
 
   // Determine primary recommendation — priority order matters
   const priority: PlanType[] = [
-    'medicare', 'medicaid', 'employer_sponsored', 'aca_marketplace',
+    'medicare', 'medicaid', 'chip', 'employer_sponsored', 'aca_marketplace',
     'school_plan', 'international_student_plan', 'cobra', 'short_term'
   ]
   const primaryRecommendation = priority.find(p => eligible.includes(p)) || 'short_term'

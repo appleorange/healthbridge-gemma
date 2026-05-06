@@ -132,6 +132,7 @@ export default function ChatInterface({ userProfile, autoSendPrompt, onAutoPromp
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: apiMessages, userProfile }),
+        signal: AbortSignal.timeout(30000),
       })
 
       if (!res.body) throw new Error('No stream')

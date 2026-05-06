@@ -1,9 +1,7 @@
+import { anthropic as client } from '@/lib/api/anthropic'
 import { calculateEligibility } from '@/lib/eligibility/engine'
 import { EligibilityRequestSchema } from '@/lib/validation/schemas'
-import Anthropic from '@anthropic-ai/sdk'
 import type { UserProfile, EligibilityResult } from '@/types'
-
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 const STATUS_LABELS: Record<string, string> = {
   us_citizen: 'US citizen',

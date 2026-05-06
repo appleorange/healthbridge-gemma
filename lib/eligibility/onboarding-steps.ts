@@ -373,6 +373,14 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
         required: false,
         helpText: 'This affects CHIP eligibility and household size calculations.',
       },
+      {
+        id: 'dependentsHaveUSCitizenChild',
+        label: 'Do any of your children have US citizenship or a green card?',
+        type: 'toggle',
+        required: false,
+        showWhen: { field: 'hasDependents', value: true },
+        helpText: 'US-citizen and LPR children can qualify for CHIP regardless of their parents\' immigration status.',
+      },
     ],
   },
 

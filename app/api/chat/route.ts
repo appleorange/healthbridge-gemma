@@ -1,12 +1,8 @@
-import Anthropic from '@anthropic-ai/sdk'
+import { anthropic as client } from '@/lib/api/anthropic'
 import { buildSystemPrompt } from '@/lib/prompts/system'
 import { ChatRequestSchema } from '@/lib/validation/schemas'
 
 export const runtime = 'nodejs'
-
-const client = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-})
 
 export async function POST(req: Request) {
   try {

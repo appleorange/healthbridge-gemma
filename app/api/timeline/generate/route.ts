@@ -1,12 +1,8 @@
-import Anthropic from '@anthropic-ai/sdk'
+import { anthropic as client, extractJSON } from '@/lib/api/anthropic'
 import type { TimelineEvent } from '@/types'
 import { TimelineRequestSchema } from '@/lib/validation/schemas'
 
 export const runtime = 'nodejs'
-
-const client = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-})
 
 export async function POST(req: Request) {
   try {
@@ -33,13 +29,12 @@ ${JSON.stringify({ primaryRecommendation: eligibilityResult.primaryRecommendatio
 
     const text = message.content[0].type === 'text' ? message.content[0].text : '[]'
 
-    // Extract JSON array from response (Claude may wrap it in markdown code fences)
-    const jsonMatch = text.match(/\[[\s\S]*\]/)
-    if (!jsonMatch) {
+    let rawEvents: Partial<TimelineEvent>[]
+    try {
+      rawEvents = extractJSON(text) as Partial<TimelineEvent>[]
+    } catch {
       return Response.json({ events: [] })
     }
-
-    const rawEvents = JSON.parse(jsonMatch[0]) as Partial<TimelineEvent>[]
 
     // Validate and tag each event as AI-sourced
     const events: TimelineEvent[] = rawEvents

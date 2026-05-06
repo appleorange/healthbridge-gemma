@@ -1,9 +1,7 @@
-import Anthropic from '@anthropic-ai/sdk'
+import { anthropic as client, extractJSON } from '@/lib/api/anthropic'
 import { NetworkCheckRequestSchema } from '@/lib/validation/schemas'
 
 export const runtime = 'nodejs'
-
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 const CMS_KEY = process.env.HEALTHCARE_GOV_API_KEY || 'a94d697d-5fe2-43d5-b829-fbf1d52d9c49'
 
 export interface NetworkCheckResult {
@@ -122,10 +120,9 @@ Respond ONLY with valid JSON, no other text:
     })
 
     const text = message.content[0].type === 'text' ? message.content[0].text : '{}'
-    const jsonMatch = text.match(/\{[\s\S]*\}/)
     let aiResult: { inNetwork: boolean | null; reasoning: string; confidence: 'likely' | 'unlikely' | 'unknown'; suggestion: string }
     try {
-      aiResult = jsonMatch ? JSON.parse(jsonMatch[0]) : null
+      aiResult = extractJSON(text) as typeof aiResult
     } catch {
       aiResult = { inNetwork: null, reasoning: 'Unable to estimate.', confidence: 'unknown', suggestion: 'Call the member services number on your insurance card to verify.' }
     }

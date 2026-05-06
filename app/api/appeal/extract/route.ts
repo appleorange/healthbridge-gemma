@@ -1,10 +1,8 @@
 import { NextRequest } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
+import { anthropic as client, extractJSON } from '@/lib/api/anthropic'
 import { z } from 'zod'
 
 export const runtime = 'nodejs'
-
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 const ExtractRequestSchema = z.object({
   fileData: z.string().min(1),
@@ -49,10 +47,7 @@ export async function POST(req: NextRequest) {
     const block = response.content?.[0]
     if (!block || block.type !== 'text') throw new Error('Claude returned no text content')
 
-    const jsonMatch = block.text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) throw new Error('No JSON found in response')
-
-    const raw = JSON.parse(jsonMatch[0])
+    const raw = extractJSON(block.text) as Record<string, unknown>
     const result = {
       planName: typeof raw.planName === 'string' ? raw.planName : null,
       denialCode: typeof raw.denialCode === 'string' ? raw.denialCode : null,

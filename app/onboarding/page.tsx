@@ -78,6 +78,7 @@ export default function OnboardingPage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ profile, language: lang }),
+          signal: AbortSignal.timeout(15000),
         })
         const result = await res.json()
         sessionStorage.setItem('hb_profile', JSON.stringify(profile))

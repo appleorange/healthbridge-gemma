@@ -1,10 +1,8 @@
-import Anthropic from '@anthropic-ai/sdk'
+import { anthropic as client, extractJSON } from '@/lib/api/anthropic'
 import { DocumentParseRequestSchema } from '@/lib/validation/schemas'
 import { getFPLPercent } from '@/lib/constants/fpl'
 
 export const runtime = 'nodejs'
-
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 const PARSE_SYSTEM = `You are a health insurance document analyst. When given a document, you:
 1. Identify the document type (insurance_card, eob, prior_auth, appeal_letter, tax_form, plan_summary, employer_guide, or unknown)
@@ -68,23 +66,11 @@ export async function POST(req: Request) {
 
     const text = response.content[0].type === 'text' ? response.content[0].text : ''
 
-    // Extract JSON from response (handle potential markdown wrapping)
-    const jsonMatch = text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) {
-      throw new Error('No JSON found in Claude response')
-    }
-
-    let result
+    let result: Record<string, unknown>
     try {
-      result = JSON.parse(jsonMatch[0])
+      result = extractJSON(text) as Record<string, unknown>
     } catch {
-      // Strip markdown fences and retry
-      const cleaned = jsonMatch[0].replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-      try {
-        result = JSON.parse(cleaned)
-      } catch {
-        throw new Error('Could not parse document — the file may be too complex or low quality. Try a clearer scan or a different page.')
-      }
+      throw new Error('Could not parse document — the file may be too complex or low quality. Try a clearer scan or a different page.')
     }
 
     return Response.json({

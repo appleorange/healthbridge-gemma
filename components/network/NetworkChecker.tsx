@@ -92,6 +92,7 @@ export default function NetworkChecker({ profile, planCards }: Props) {
               planName: plan.name,
               planNetworkType: plan.networkType,
             }),
+            signal: AbortSignal.timeout(15000),
           })
           const data: NetworkCheckResult = await res.json()
           setResults(prev => prev.map((r, i) => i === idx ? { ...r, result: data, loading: false } : r))

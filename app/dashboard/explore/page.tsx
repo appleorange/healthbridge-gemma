@@ -70,6 +70,7 @@ export default function ExplorePage() {
           eligiblePlans: e.eligiblePlans,
           primaryRecommendation: e.primaryRecommendation,
         }),
+        signal: AbortSignal.timeout(20000),
       })
       const data = await res.json()
       const cards = data.plans ?? []

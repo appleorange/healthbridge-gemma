@@ -101,6 +101,7 @@ export default function AppealAssistant({ userProfile, eligibilityResult }: Prop
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fileData: base64, mimeType: file.type }),
+        signal: AbortSignal.timeout(30000),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Extraction failed')
@@ -141,6 +142,7 @@ export default function AppealAssistant({ userProfile, eligibilityResult }: Prop
           immigrationStatus: userProfile?.immigrationStatus ?? 'unknown',
           state: userProfile?.state ?? 'unknown',
         }),
+        signal: AbortSignal.timeout(30000),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Analysis failed')
@@ -169,6 +171,7 @@ export default function AppealAssistant({ userProfile, eligibilityResult }: Prop
           state: userProfile?.state ?? 'unknown',
           age: userProfile?.age ?? null,
         }),
+        signal: AbortSignal.timeout(60000),
       })
       if (!res.ok || !res.body) throw new Error('Draft failed')
       const reader = res.body.getReader()
