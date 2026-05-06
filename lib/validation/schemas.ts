@@ -84,6 +84,7 @@ export const PlanTypeSchema = z.enum(planTypes)
 
 export const EligibilityRequestSchema = z.object({
   profile: UserProfileSchema,
+  language: z.enum(['en', 'es']).optional(),
 })
 
 export const PlansRequestSchema = z.object({
@@ -152,6 +153,7 @@ export const AppealDraftRequestSchema = z.object({
 
 export const ChecklistRequestSchema = z.object({
   profile: UserProfileSchema,
+  language: z.enum(['en', 'es']).optional(),
   eligibility: z.object({
     primaryRecommendation: PlanTypeSchema,
     eligiblePlans: z.array(PlanTypeSchema),

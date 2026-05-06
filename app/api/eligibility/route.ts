@@ -40,7 +40,11 @@ const PLAN_LABELS: Record<string, string> = {
   none: 'no standard plan',
 }
 
-async function generateVisaSummary(profile: UserProfile, result: EligibilityResult): Promise<string> {
+async function generateVisaSummary(
+  profile: UserProfile,
+  result: EligibilityResult,
+  language: 'en' | 'es' = 'en',
+): Promise<string> {
   const statusLabel = STATUS_LABELS[profile.immigrationStatus] ?? profile.immigrationStatus
   const primaryLabel = PLAN_LABELS[result.primaryRecommendation] ?? result.primaryRecommendation
   const eligibleLabels = (result.eligiblePlans ?? []).map(p => PLAN_LABELS[p] ?? p).join(', ')
@@ -73,7 +77,7 @@ Write 2–4 sentences that explain this person's situation in completely plain l
 2. Clearly state what they can and cannot access, and why — be concrete, not vague
 3. Call out anything unique or important to their specific situation (state, income, dependents, visa-specific risks like coverage gaps on job loss)
 
-Write directly to the user ("you" / "your"). Warm and clear, like a knowledgeable friend. No bullet points — flowing sentences only. No heading. No preamble.`
+Write directly to the user ("you" / "your"). Warm and clear, like a knowledgeable friend. No bullet points — flowing sentences only. No heading. No preamble.${language === 'es' ? '\n\nRespond entirely in Spanish.' : ''}`
 
   const response = await client.messages.create({
     model: 'claude-sonnet-4-6',
@@ -96,7 +100,11 @@ export async function POST(req: Request) {
     const result = calculateEligibility(parsed.data.profile)
 
     try {
-      result.visaEligibilitySummary = await generateVisaSummary(parsed.data.profile, result)
+      result.visaEligibilitySummary = await generateVisaSummary(
+        parsed.data.profile,
+        result,
+        parsed.data.language ?? 'en',
+      )
     } catch (summaryErr) {
       console.error('Visa summary generation failed (non-fatal):', summaryErr)
     }

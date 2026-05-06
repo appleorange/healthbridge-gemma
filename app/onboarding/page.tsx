@@ -3,13 +3,17 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Shield, ChevronRight, ChevronLeft } from 'lucide-react'
 import { motion } from 'framer-motion'
-import { ONBOARDING_STEPS, US_STATES, getVisibleSteps } from '@/lib/eligibility/onboarding-steps'
+import { US_STATES, getVisibleSteps, getLocalizedSteps } from '@/lib/eligibility/onboarding-steps'
 import type { UserProfile } from '@/types'
 import StepTransition from '@/components/ui/StepTransition'
 import { AnimatedField } from '@/components/onboarding/AnimatedField'
+import LanguageToggle from '@/components/ui/LanguageToggle'
+import { useLanguage } from '@/hooks/useLanguage'
+import { ES_UI } from '@/lib/i18n/es'
 
 export default function OnboardingPage() {
   const router = useRouter()
+  const [lang, setLang] = useLanguage()
   const [currentStep, setCurrentStep] = useState(0)
   const [profile, setProfile] = useState<Partial<UserProfile>>({
     householdSize: 1,
@@ -23,8 +27,9 @@ export default function OnboardingPage() {
   const [loading, setLoading] = useState(false)
   const [direction, setDirection] = useState<'forward' | 'backward'>('forward')
 
-  const visibleSteps = getVisibleSteps(profile as Record<string, unknown>)
-  const step = visibleSteps[currentStep] ?? ONBOARDING_STEPS[currentStep]
+  const localizedSteps = getLocalizedSteps(lang)
+  const visibleSteps = getVisibleSteps(profile as Record<string, unknown>, localizedSteps)
+  const step = visibleSteps[currentStep] ?? localizedSteps[currentStep]
   const isLast = currentStep === visibleSteps.length - 1
 
   // Filter fields based on showWhen conditions
@@ -72,7 +77,7 @@ export default function OnboardingPage() {
         const res = await fetch('/api/eligibility', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ profile }),
+          body: JSON.stringify({ profile, language: lang }),
         })
         const result = await res.json()
         sessionStorage.setItem('hb_profile', JSON.stringify(profile))
@@ -103,6 +108,9 @@ export default function OnboardingPage() {
           <Shield className="w-3.5 h-3.5 text-white" />
         </div>
         <span className="font-semibold text-gray-900">HealthBridge</span>
+        <div className="ml-auto">
+          <LanguageToggle lang={lang} onChange={setLang} />
+        </div>
       </div>
 
       {/* Animated stepper */}
@@ -154,7 +162,9 @@ export default function OnboardingPage() {
           <StepTransition stepKey={currentStep} direction={direction}>
           {/* Step counter */}
           <p className="text-sm text-gray-400 mb-2">
-            Step {currentStep + 1} of {visibleSteps.length}
+            {lang === 'es'
+              ? ES_UI.stepOf(currentStep + 1, visibleSteps.length)
+              : `Step ${currentStep + 1} of ${visibleSteps.length}`}
           </p>
 
           <h1 className="text-2xl font-bold text-gray-900 mb-2">{step.title}</h1>
@@ -167,7 +177,7 @@ export default function OnboardingPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   {field.label}
-                  {!field.required && <span className="text-gray-400 font-normal ml-1">(optional)</span>}
+                  {!field.required && <span className="text-gray-400 font-normal ml-1">{lang === 'es' ? ES_UI.optional : '(optional)'}</span>}
                 </label>
 
                 {field.type === 'select' && (
@@ -197,7 +207,7 @@ export default function OnboardingPage() {
                     value={(profile as Record<string, unknown>)[field.id] as string || ''}
                     onChange={e => update(field.id, e.target.value)}
                   >
-                    <option value="">Select your state...</option>
+                    <option value="">{lang === 'es' ? ES_UI.selectState : 'Select your state...'}</option>
                     {US_STATES.map(s => (
                       <option key={s.value} value={s.value}>{s.label}</option>
                     ))}
@@ -253,7 +263,7 @@ export default function OnboardingPage() {
 
                 {field.type === 'toggle' && (
                   <div className="flex items-center gap-3">
-                    {['Yes', 'No'].map(opt => (
+                    {(['Yes', 'No'] as const).map(opt => (
                       <button
                         key={opt}
                         onClick={() => update(field.id, opt === 'Yes')}
@@ -263,7 +273,7 @@ export default function OnboardingPage() {
                             : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
                         }`}
                       >
-                        {opt}
+                        {lang === 'es' ? (opt === 'Yes' ? ES_UI.yes : ES_UI.no) : opt}
                       </button>
                     ))}
                   </div>
@@ -282,7 +292,7 @@ export default function OnboardingPage() {
           {/* Navigation */}
           <div className="flex gap-3 mt-10">
             <button onClick={handleBack} className="btn-secondary flex items-center gap-2">
-              <ChevronLeft className="w-4 h-4" /> Back
+              <ChevronLeft className="w-4 h-4" /> {lang === 'es' ? ES_UI.back : 'Back'}
             </button>
             <button
               onClick={handleNext}
@@ -290,11 +300,11 @@ export default function OnboardingPage() {
               className="btn-primary flex-1 flex items-center justify-center gap-2"
             >
               {loading ? (
-                <span>Analyzing your profile...</span>
+                <span>{lang === 'es' ? ES_UI.analyzing : 'Analyzing your profile...'}</span>
               ) : isLast ? (
-                <>See my options <ChevronRight className="w-4 h-4" /></>
+                <>{lang === 'es' ? ES_UI.seeMyOptions : 'See my options'} <ChevronRight className="w-4 h-4" /></>
               ) : (
-                <>Continue <ChevronRight className="w-4 h-4" /></>
+                <>{lang === 'es' ? ES_UI.continue : 'Continue'} <ChevronRight className="w-4 h-4" /></>
               )}
             </button>
           </div>

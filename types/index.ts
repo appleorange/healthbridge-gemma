@@ -61,6 +61,7 @@ export interface UserProfile {
   schoolRequiresInsurance?: boolean
 
   // Dependent details
+  dependentsHaveUSCitizenChild?: boolean
   dependentCoverageEndDate?: string
   dependentOnWhom?: 'parent' | 'spouse' | 'partner'
   parentPlanInsurer?: string

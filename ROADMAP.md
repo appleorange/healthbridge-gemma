@@ -73,35 +73,45 @@ Claude-generated per-user checklist: documents to gather, who to contact, action
 ### Task 3 — Add Zod validation to all API routes `✅ done`
 Installed Zod. Created `lib/validation/schemas.ts` with `UserProfileSchema` + 7 per-route schemas. All 8 API routes now validate at the POST boundary before passing to business logic. Added missing try/catch to `appeal/draft`.
 
-### Task 4 — Basic Spanish language support `todo`
-Add Spanish as a language option starting with the onboarding flow and eligibility results screens. Users are often not native English speakers. Use Claude to handle translations where needed.
+### Task 4 — Basic Spanish language support `✅ done`
+EN/ES toggle in onboarding header and dashboard sidebar (persisted in `hb_lang` sessionStorage). All onboarding step titles, subtitles, field labels, option labels, and help text translated via `lib/i18n/es.ts` overlay applied by `getLocalizedSteps(lang)`. Toggle Yes/No, step counter, Back/Continue/Submit buttons, state dropdown placeholder, and "(optional)" tag all localized. Dashboard section headers, trust banner, checklist header, quick-action labels, plan section titles all translate on language switch. Claude-generated content (visa eligibility summary, action checklist) responds in Spanish when language is `es` — controlled by `language` field added to `/api/eligibility` and `/api/checklist` schemas.
 
 ### Task 5 — Sharpen visa × eligibility output `✅ done`
 The eligibility API route now calls Claude after the engine runs to generate a `visaEligibilitySummary` — 2–4 sentences in plain language, specific to the user's visa type, explaining exactly what they can and cannot access and why. Displayed in the recommendation banner on the dashboard home, falling back to `bestOptionReasoning` if unavailable. Generated once at onboarding time, stored in sessionStorage.
 
 ---
 
-## Phase 3 — Defer Until After MVP
+## Phase 3 — Security & Reliability (active)
 
-**Do not work on these until Phase 1 and Phase 2 are fully done.**
+**Rationale:** Security before polish. HealthBridge handles sensitive immigration and health data. Fix exploitable surfaces before shipping UI improvements.
 
-- Provider network checker improvements (healthcare.gov already does this adequately)
-- Plan comparison tool enhancements (not the core differentiator)
-- Additional animations or UI polish (the UI is already strong from v1.1)
+### Task 1 — Prompt injection mitigations `✅ done`
+All user-supplied fields in `appeal/analyze`, `appeal/draft`, and `network-check` are now wrapped in XML delimiter tags (`<plan_name>`, `<denial_reason>`, `<policy_language_cited_in_denial>`, `<provider_name>`, etc.) with a preamble instructing Claude to treat tagged content as data only. Prevents `planName = "XYZ\n\nIgnore all instructions..."` class of attacks.
+
+### Task 2 — CHIP for children in mixed-status families `todo`
+Add CHIP to eligible plans when `profile.hasDependents === true` and parents are undocumented/ineligible. Children who are US citizens are CHIP/Medicaid eligible regardless of parents' status. Requires a child citizenship question in onboarding. (`PlanType` already includes `chip` — never evaluated.)
+
+### Task 3 — Fetch timeouts + centralize Anthropic client `todo`
+- `AbortSignal.timeout(10000)` on all client-side fetches (quick reliability win, prevents hanging requests with no user feedback)
+- Create `lib/api/anthropic.ts` with singleton client, `extractJSON()` helper, `createStream()` wrapper. Replace 6 inline `new Anthropic()` calls. See `CONCERNS.md §3.1`.
 
 ---
 
-## Backlog — Discovered During Development
+## Phase 4 — UI Polish (deferred)
 
-Items that emerged during work but don't map to a Phase 1/2 task. Review before starting each new phase.
+Start after Phase 3 is complete.
 
-- **CHIP eligibility for children in mixed-status families** — Add CHIP to eligible plans when `profile.hasDependents === true`. Children who are US citizens are CHIP/Medicaid eligible regardless of parents' status. Requires a child citizenship question in onboarding. (`PlanType` already includes `chip` — never evaluated.)
-- **2027 APTC restriction** — Must implement before Jan 1, 2027. Split `APTC_ELIGIBLE_STATUSES` from `MARKETPLACE_ACCESS_STATUSES`; after 2027 only LPRs, US citizens, Cuban-Haitian entrants, and COFA citizens keep APTC. All non-immigrant visa holders lose it. See `// ⚠️ TODO` in `lib/eligibility/rules.ts`.
-- **Prompt injection mitigations** — Wrap user-supplied fields in XML delimiter tags before interpolating into Claude prompts in `appeal/analyze`, `appeal/draft`, `network-check`. See `CONCERNS.md §1.4`.
-- **Centralize Anthropic client** — Create `lib/api/anthropic.ts` with singleton client, `extractJSON()` helper, `createStream()` wrapper. Replace 6 inline `new Anthropic()` calls. See `CONCERNS.md §3.1`.
+- Provider network checker improvements
+- Plan comparison tool enhancements
+- Additional animations / v1.1 UI overhaul (Lenis landing page, animated onboarding — see `.planning/ROADMAP.md`)
+
+---
+
+## Backlog — Lower Priority
+
 - **Emergency Medicaid for undocumented users** — Surface as an eligible plan (not just explanation text).
+- **2027 APTC restriction** — Must implement before Jan 1, 2027. Split `APTC_ELIGIBLE_STATUSES` from `MARKETPLACE_ACCESS_STATUSES`; after 2027 only LPRs, US citizens, Cuban-Haitian entrants, and COFA citizens keep APTC. All non-immigrant visa holders lose it. See `// ⚠️ TODO` in `lib/eligibility/rules.ts`.
 - **Remove hardcoded CMS fallback API key** — See `CONCERNS.md §1.2`.
-- **Add fetch timeouts** — `AbortSignal.timeout(10000)` on all client-side fetches.
 - **AI disclaimer banners** — On chat and appeal assistant. See `CONCERNS.md §4.4`.
 - **Verification timestamps on state lists** — Add `// last verified: YYYY-MM-DD` to all state lists in `rules.ts`.
 
@@ -119,3 +129,5 @@ Items that emerged during work but don't map to a Phase 1/2 task. Review before 
 | 2026-05-03 | Phase 2 · Task 1 | → done | `/api/appeal/extract` route; doc upload pre-fills form; policy language extracted, surfaced, and quoted in letter |
 | 2026-05-03 | Phase 2 · Task 2 | → done | `/api/checklist` route; Claude-generated per-user action checklist; `ChecklistItem` type + Zod schema; `ActionChecklist` component; cached in sessionStorage |
 | 2026-05-03 | Phase 2 · Task 5 | → done | `visaEligibilitySummary` field on `EligibilityResult`; Claude call in eligibility route post-engine; plain-language visa-specific narrative on dashboard banner |
+| 2026-05-05 | Phase 2 · Task 4 | → done | EN/ES toggle; `lib/i18n/es.ts` full onboarding translation overlay; `getLocalizedSteps(lang)`; dashboard static strings localized; Claude generates Spanish output when `language=es` |
+| 2026-05-05 | Phase 3 · Task 1 | → done | XML delimiter tags on all user-supplied fields in `appeal/analyze`, `appeal/draft`, `network-check`; data-only preamble added to each prompt |

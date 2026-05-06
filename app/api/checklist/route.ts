@@ -29,7 +29,7 @@ export async function POST(req: Request) {
       return Response.json({ error: 'Invalid request', details: parsed.error.flatten() }, { status: 400 })
     }
 
-    const { profile, eligibility } = parsed.data
+    const { profile, eligibility, language } = parsed.data
     const primaryLabel = PLAN_LABEL[eligibility.primaryRecommendation] ?? eligibility.primaryRecommendation
 
     const prompt = `You are a health insurance navigator helping a user take their next concrete steps toward getting coverage.
@@ -74,7 +74,7 @@ Rules:
 - Maximum 8 items total. Prioritize by urgency. Lead with the highest-impact items.
 - Do not include items that don't apply (e.g. no COBRA deadline if they're not losing coverage)
 
-Return only valid JSON — no markdown fences, no explanation.`
+Return only valid JSON — no markdown fences, no explanation.${language === 'es' ? '\n\nWrite all title and detail fields in Spanish.' : ''}`
 
     const response = await client.messages.create({
       model: 'claude-sonnet-4-6',

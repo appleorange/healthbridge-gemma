@@ -11,11 +11,16 @@ import EligibilityFlowchart from '@/components/flowchart/EligibilityFlowchart'
 import EnrollmentTimeline from '@/components/timeline/EnrollmentTimeline'
 import ActionChecklist from '@/components/checklist/ActionChecklist'
 import TrustBanner from '@/components/ui/TrustBanner'
+import LanguageToggle from '@/components/ui/LanguageToggle'
+import { useLanguage } from '@/hooks/useLanguage'
+import { ES_DASHBOARD } from '@/lib/i18n/es'
 import { PLAN_INFO } from '@/lib/dashboard/plan-info'
 import type { UserProfile, EligibilityResult, PlanType, ParsedDocument, ChecklistItem } from '@/types'
 
 export default function DashboardHomePage() {
   const router = useRouter()
+  const [lang, setLang] = useLanguage()
+  const t = lang === 'es' ? ES_DASHBOARD : null
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [eligibility, setEligibility] = useState<EligibilityResult | null>(null)
   const [expandedPlan, setExpandedPlan] = useState<PlanType | null>(null)
@@ -47,7 +52,7 @@ export default function DashboardHomePage() {
     fetch('/api/checklist', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ profile: parsedProfile, eligibility: parsedEligibility }),
+      body: JSON.stringify({ profile: parsedProfile, eligibility: parsedEligibility, language: sessionStorage.getItem('hb_lang') ?? 'en' }),
     })
       .then(r => r.json())
       .then(data => {
@@ -82,7 +87,7 @@ export default function DashboardHomePage() {
 
       {/* Recommendation banner */}
       <div className="bg-brand-600 rounded-2xl p-5 text-white">
-        <p className="text-brand-200 text-xs font-semibold uppercase tracking-wide mb-1">Best option for your situation</p>
+        <p className="text-brand-200 text-xs font-semibold uppercase tracking-wide mb-1">{t?.bestOption ?? 'Best option for your situation'}</p>
         <div className="flex items-center gap-3 flex-wrap mb-2">
           <h2 className="text-xl font-bold">{primary.label}</h2>
           {costLabel && (
@@ -98,33 +103,33 @@ export default function DashboardHomePage() {
         )}
         <div className="flex gap-2 flex-wrap">
           <Link href="/dashboard/explore" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-white text-xs font-medium transition-all border border-white/20">
-            <Compass className="w-3.5 h-3.5" /> Explore plans
+            <Compass className="w-3.5 h-3.5" /> {t?.explorePlans ?? 'Explore plans'}
           </Link>
           <Link href="/dashboard/tools" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-white text-xs font-medium transition-all border border-white/20">
-            <MessageCircle className="w-3.5 h-3.5" /> Ask AI
+            <MessageCircle className="w-3.5 h-3.5" /> {t?.askAI ?? 'Ask AI'}
           </Link>
           <Link href="/dashboard/tools" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-white text-xs font-medium transition-all border border-white/20">
-            <FileText className="w-3.5 h-3.5" /> Upload docs
+            <FileText className="w-3.5 h-3.5" /> {t?.uploadDocs ?? 'Upload docs'}
           </Link>
         </div>
       </div>
 
       <TrustBanner
-        text="For informational use only — not legal or insurance advice. Rules are based on current ACA and federal eligibility guidelines."
+        text={t?.trustBanner ?? 'For informational use only — not legal or insurance advice. Rules are based on current ACA and federal eligibility guidelines.'}
         verifyUrl="https://www.healthcare.gov"
-        verifyLabel="Verify on healthcare.gov →"
+        verifyLabel={t?.verifyLabel ?? 'Verify on healthcare.gov →'}
       />
 
       {/* Action checklist */}
       <section>
         <div className="flex items-center gap-2 mb-3">
           <ListChecks className="w-4 h-4 text-gray-400" />
-          <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Your action checklist</h3>
+          <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">{t?.yourChecklist ?? 'Your action checklist'}</h3>
         </div>
         {checklistLoading && (
           <div className="flex items-center gap-2 p-4 bg-white border border-gray-100 rounded-xl text-sm text-gray-400">
             <div className="w-4 h-4 border-2 border-brand-400 border-t-transparent rounded-full animate-spin shrink-0" />
-            Generating your personalized checklist…
+            {t?.generatingChecklist ?? 'Generating your personalized checklist…'}
           </div>
         )}
         {checklist && checklist.length > 0 && <ActionChecklist items={checklist} />}
@@ -133,9 +138,9 @@ export default function DashboardHomePage() {
       {/* Quick actions */}
       <div className="grid grid-cols-3 gap-3">
         {[
-          { href: '/dashboard/explore', icon: Compass, label: 'Plans & Cost', color: 'text-brand-600 bg-brand-50' },
-          { href: '/dashboard/tools', icon: Wrench, label: 'Tools', color: 'text-blue-600 bg-blue-50' },
-          { href: '/dashboard/help', icon: HelpCircle, label: 'Help', color: 'text-gray-600 bg-gray-100' },
+          { href: '/dashboard/explore', icon: Compass, label: t?.plans ?? 'Plans & Cost', color: 'text-brand-600 bg-brand-50' },
+          { href: '/dashboard/tools', icon: Wrench, label: t?.tools ?? 'Tools', color: 'text-blue-600 bg-blue-50' },
+          { href: '/dashboard/help', icon: HelpCircle, label: t?.help ?? 'Help', color: 'text-gray-600 bg-gray-100' },
         ].map(item => (
           <Link
             key={item.href}
@@ -153,7 +158,7 @@ export default function DashboardHomePage() {
       {/* Eligible plans */}
       <section>
         <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-          Plans you qualify for ({eligibility.eligiblePlans?.length ?? 0})
+          {t ? t.plansQualify(eligibility.eligiblePlans?.length ?? 0) : `Plans you qualify for (${eligibility.eligiblePlans?.length ?? 0})`}
         </h3>
         <div className="space-y-2">
           {(eligibility.eligiblePlans ?? []).map(plan => {
@@ -181,7 +186,7 @@ export default function DashboardHomePage() {
                       </p>
                       {isPrimary && (
                         <span className="text-xs bg-brand-100 text-brand-700 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
-                          <Sparkles className="w-2.5 h-2.5" /> Recommended
+                          <Sparkles className="w-2.5 h-2.5" /> {t?.recommended ?? 'Recommended'}
                         </span>
                       )}
                       {est && (
@@ -212,7 +217,7 @@ export default function DashboardHomePage() {
       {/* Special circumstances */}
       {(eligibility.specialCircumstances?.length ?? 0) > 0 && (
         <section>
-          <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Important notes</h3>
+          <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">{t?.importantNotes ?? 'Important notes'}</h3>
           <div className="space-y-2">
             {(eligibility.specialCircumstances ?? []).map((note, i) => (
               <div key={i} className="flex gap-3 p-3 bg-amber-50 border border-amber-100 rounded-xl">
@@ -227,7 +232,7 @@ export default function DashboardHomePage() {
       {/* Next steps */}
       {(eligibility.nextSteps?.length ?? 0) > 0 && (
         <section>
-          <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Next steps</h3>
+          <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">{t?.nextSteps ?? 'Next steps'}</h3>
           <div className="space-y-2">
             {(eligibility.nextSteps ?? []).map(step => (
               <div key={step.id} className="flex items-start gap-3 p-4 bg-white border border-gray-100 rounded-xl">
@@ -240,7 +245,7 @@ export default function DashboardHomePage() {
                   <p className="text-sm font-semibold text-gray-800">{step.title}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{step.description}</p>
                   {step.deadline && (
-                    <p className="text-xs text-red-500 mt-1 font-medium">Deadline: {step.deadline}</p>
+                    <p className="text-xs text-red-500 mt-1 font-medium">{t?.deadline ?? 'Deadline'}: {step.deadline}</p>
                   )}
                 </div>
                 {step.actionUrl && (
@@ -258,7 +263,7 @@ export default function DashboardHomePage() {
       {docDeadlines.length > 0 && (
         <section>
           <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-            From your documents ({documents.length})
+            {t ? t.fromDocuments(documents.length) : `From your documents (${documents.length})`}
           </h3>
           <div className="space-y-2">
             {docDeadlines.map((dl, i) => (
@@ -285,8 +290,8 @@ export default function DashboardHomePage() {
         >
           <div className="flex items-center gap-2">
             <GitBranch className="w-4 h-4 text-gray-400" />
-            <span className="text-sm font-semibold text-gray-700">How was this decided?</span>
-            <span className="text-xs text-gray-400">See the rules behind your eligibility</span>
+            <span className="text-sm font-semibold text-gray-700">{t?.howDecided ?? 'How was this decided?'}</span>
+            <span className="text-xs text-gray-400">{t?.seeRules ?? 'See the rules behind your eligibility'}</span>
           </div>
           {showFlowchart ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
         </button>
@@ -309,8 +314,8 @@ export default function DashboardHomePage() {
         >
           <div className="flex items-center gap-2">
             <Calendar className="w-4 h-4 text-gray-400" />
-            <span className="text-sm font-semibold text-gray-700">Enrollment calendar</span>
-            <span className="text-xs text-gray-400">Key dates and deadlines</span>
+            <span className="text-sm font-semibold text-gray-700">{t?.enrollmentCalendar ?? 'Enrollment calendar'}</span>
+            <span className="text-xs text-gray-400">{t?.keyDates ?? 'Key dates and deadlines'}</span>
           </div>
           {showTimeline ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
         </button>
@@ -329,7 +334,7 @@ export default function DashboardHomePage() {
       {(eligibility.ineligiblePlans?.length ?? 0) > 0 && (
         <section className="pb-8">
           <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-            Plans you don&apos;t qualify for
+            {t?.plansNotQualify ?? "Plans you don't qualify for"}
           </h3>
           <div className="flex flex-wrap gap-2">
             {(eligibility.ineligiblePlans ?? []).map(plan => (
@@ -339,7 +344,7 @@ export default function DashboardHomePage() {
             ))}
           </div>
           <p className="text-xs text-gray-400 mt-2">
-            Expand &quot;Why this route?&quot; above to see the legal reasons behind each decision.
+            {t?.expandWhy ?? 'Expand "Why this route?" above to see the legal reasons behind each decision.'}
           </p>
         </section>
       )}

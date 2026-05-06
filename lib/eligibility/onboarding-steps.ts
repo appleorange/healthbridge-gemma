@@ -1,4 +1,6 @@
 import type { OnboardingStep } from '@/types'
+import type { Language, StepTranslation } from '@/lib/i18n/es'
+import { ES_STEPS } from '@/lib/i18n/es'
 
 export const US_STATES = [
   { value: 'AL', label: 'Alabama' }, { value: 'AK', label: 'Alaska' },
@@ -612,7 +614,10 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
 ]
 
 // Helper: determine which steps to show based on current profile state
-export function getVisibleSteps(profile: Record<string, unknown>): OnboardingStep[] {
+export function getVisibleSteps(
+  profile: Record<string, unknown>,
+  steps: OnboardingStep[] = ONBOARDING_STEPS,
+): OnboardingStep[] {
   // j1_scholar and j2 are NOT included — J-1 scholars are researchers, not students.
   // J-1 scholars who ARE enrolled at a university will have employmentStatus === 'student',
   // which triggers the step via isStudentEmployment below.
@@ -621,11 +626,45 @@ export function getVisibleSteps(profile: Record<string, unknown>): OnboardingSte
   const isStudentEmployment = profile.employmentStatus === 'student'
   const isStudentToggled = profile.isStudent === true
 
-  return ONBOARDING_STEPS.filter(step => {
+  return steps.filter(step => {
     if (step.id === 'student_details') {
       // Show student step if on a student visa OR if employment is 'student' OR if they said yes to student toggle
       return isStudentVisa || isStudentEmployment || isStudentToggled
     }
     return true
   })
+}
+
+// Return a deep-merged copy of ONBOARDING_STEPS with Spanish translations applied
+export function getLocalizedSteps(lang: Language): OnboardingStep[] {
+  if (lang === 'en') return ONBOARDING_STEPS
+  return ONBOARDING_STEPS.map(step => applyStepTranslation(step, ES_STEPS[step.id]))
+}
+
+function applyStepTranslation(step: OnboardingStep, t: StepTranslation | undefined): OnboardingStep {
+  if (!t) return step
+  return {
+    ...step,
+    title: t.title ?? step.title,
+    subtitle: t.subtitle ?? step.subtitle,
+    fields: step.fields.map(field => {
+      const ft = t.fields?.[field.id]
+      if (!ft) return field
+      return {
+        ...field,
+        label: ft.label ?? field.label,
+        helpText: ft.helpText ?? field.helpText,
+        placeholder: ft.placeholder ?? field.placeholder,
+        options: field.options?.map(opt => {
+          const ot = ft.options?.[opt.value]
+          if (!ot) return opt
+          return {
+            ...opt,
+            label: ot.label ?? opt.label,
+            description: ot.description !== undefined ? ot.description : opt.description,
+          }
+        }),
+      }
+    }),
+  }
 }

@@ -11,6 +11,16 @@ All deep-dive docs live in `.planning/codebase/`. Read the relevant file before 
 - **Animation pitfalls (Lenis, Framer Motion)** → @.planning/research/PITFALLS.md
 - **Project goals & milestone history** → @.planning/PROJECT.md
 
+## Session Start Checklist (do this EVERY session before anything else)
+- Read `.planning/PROJECT.md` for current goals and milestone status
+- Read `.claude/TASKS.md` for pending and in-progress tasks
+- Re-read the Lessons Learned section of this file
+- Confirm which git branch you are on
+
+## MCP Servers
+- Use context7 MCP to fetch up-to-date docs before implementing any
+  library feature (Next.js, Framer Motion, GSAP, Anthropic SDK, Zod)
+
 ## Tech Stack (quick ref)
 Next.js 14 App Router · React 18 · TypeScript (strict) · Tailwind CSS v4 · Framer Motion · GSAP · Anthropic Claude API (`claude-sonnet-4-6`)
 

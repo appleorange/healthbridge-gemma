@@ -4,6 +4,8 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Shield, Home, Compass, Wrench, HelpCircle, RotateCcw, Menu, X } from 'lucide-react'
+import LanguageToggle from '@/components/ui/LanguageToggle'
+import { useLanguage } from '@/hooks/useLanguage'
 
 const STALE_KEYS = ['hb_eligibility', 'hb_profile', 'hb_plan_cards', 'hb_plans_fetched', 'hb_compare_list', 'hb_chat_messages', 'hb_message_count', 'hb_doc_count', 'hb_appeal_count', 'hb_documents']
 
@@ -27,6 +29,7 @@ type NavItem = { href: string; icon: React.ComponentType<{ className?: string }>
 function NavContent({ onLinkClick }: { onLinkClick?: () => void }) {
   const pathname = usePathname()
   const router = useRouter()
+  const [lang, setLang] = useLanguage()
 
   return (
     <div className="flex flex-col h-full py-5">
@@ -63,14 +66,18 @@ function NavContent({ onLinkClick }: { onLinkClick?: () => void }) {
         })}
       </nav>
 
-      {/* Start over */}
-      <div className="px-2 pt-2 border-t border-gray-100">
+      {/* Language + Start over */}
+      <div className="px-2 pt-2 border-t border-gray-100 space-y-1">
+        <div className="flex items-center justify-between px-3 py-2">
+          <span className="text-xs text-gray-400 font-medium">Language</span>
+          <LanguageToggle lang={lang} onChange={setLang} />
+        </div>
         <button
           onClick={() => router.push('/onboarding')}
           className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-gray-400 hover:text-gray-600 hover:bg-gray-50 w-full transition-all"
         >
           <RotateCcw className="w-4 h-4 shrink-0" />
-          Start over
+          {lang === 'es' ? 'Empezar de nuevo' : 'Start over'}
         </button>
       </div>
     </div>
