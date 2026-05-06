@@ -538,11 +538,13 @@ function finalizePlans(
 
 // ── Main entry point ─────────────────────────────────────────────────────────
 
+import { getCachedACAPlans } from '@/lib/cache/plans'
+
 export async function getPlansForProfile(
   profile: UserProfile,
   eligiblePlans: PlanType[],
   primaryRecommendation: PlanType
-): Promise<PlanCard[]> {
+): Promise<{ plans: PlanCard[]; cached: boolean }> {
   const allCards: Omit<PlanCard, 'fitScore' | 'fitReasons' | 'isPrimaryRecommendation'>[] = []
 
   // Fetch real ACA plans if in eligiblePlans and ZIP is available
@@ -552,11 +554,16 @@ export async function getPlansForProfile(
       realAca.forEach(p => allCards.push(p))
       const nonAcaTypes = eligiblePlans.filter(t => t !== 'aca_marketplace')
       buildMockedCards(profile, nonAcaTypes).forEach(p => allCards.push(p))
-      return finalizePlans(allCards, primaryRecommendation, profile)
+      return { plans: finalizePlans(allCards, primaryRecommendation, profile), cached: false }
     }
+    // API returned empty (network failure) → serve state-specific cached ACA plans
+    getCachedACAPlans(profile.state).forEach(p => allCards.push(p))
+    const nonAcaTypes = eligiblePlans.filter(t => t !== 'aca_marketplace')
+    buildMockedCards(profile, nonAcaTypes).forEach(p => allCards.push(p))
+    return { plans: finalizePlans(allCards, primaryRecommendation, profile), cached: true }
   }
 
-  // Fall back to fully mocked cards for all eligible types
+  // No ACA in eligible plans or no ZIP — use mocked cards only
   buildMockedCards(profile, eligiblePlans).forEach(p => allCards.push(p))
-  return finalizePlans(allCards, primaryRecommendation, profile)
+  return { plans: finalizePlans(allCards, primaryRecommendation, profile), cached: false }
 }

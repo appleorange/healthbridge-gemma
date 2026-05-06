@@ -10,8 +10,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid request', details: parsed.error.issues }, { status: 400 })
     }
     const { profile, eligiblePlans, primaryRecommendation } = parsed.data
-    const plans = await getPlansForProfile(profile, eligiblePlans, primaryRecommendation)
-    return NextResponse.json({ plans })
+    const { plans, cached } = await getPlansForProfile(profile, eligiblePlans, primaryRecommendation)
+    return NextResponse.json({ plans, cached })
   } catch (e) {
     console.error(e)
     return NextResponse.json({ plans: [], error: 'Failed to fetch plans' }, { status: 500 })

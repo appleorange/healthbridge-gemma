@@ -28,6 +28,7 @@ export default function ExplorePage() {
     try { return JSON.parse(sessionStorage.getItem('hb_plan_cards') ?? '[]') } catch { return [] }
   })
   const [plansLoading, setPlansLoading] = useState(false)
+  const [plansCached, setPlansCached] = useState(false)
   const [plansFetched, setPlansFetched] = useState(() => {
     if (typeof window === 'undefined') return false
     return sessionStorage.getItem('hb_plans_fetched') === 'true'
@@ -75,6 +76,7 @@ export default function ExplorePage() {
       const data = await res.json()
       const cards = data.plans ?? []
       setPlanCards(cards)
+      setPlansCached(data.cached === true)
       setPlansFetched(true)
       sessionStorage.setItem('hb_plan_cards', JSON.stringify(cards))
       sessionStorage.setItem('hb_plans_fetched', 'true')
@@ -141,7 +143,13 @@ export default function ExplorePage() {
             <p className="text-xs text-gray-500 -mt-2 px-1">
               The plans below are ACA Marketplace options available near you based on your ZIP code — not necessarily your top recommendation above. They&apos;re shown so you can compare costs if your situation changes.
             </p>
-            {!profile.zipCode && (
+            {plansCached && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700 flex items-center gap-2">
+                <MapPin className="w-4 h-4 shrink-0" />
+                Showing sample plans — connect to internet for real-time data.
+              </div>
+            )}
+            {!profile.zipCode && !plansCached && (
               <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700 flex items-center gap-2">
                 <MapPin className="w-4 h-4 shrink-0" />
                 No ZIP code on file — showing estimated plans. Add your ZIP in onboarding for real results.
