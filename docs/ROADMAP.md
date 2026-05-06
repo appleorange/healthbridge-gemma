@@ -11,8 +11,8 @@
 
 > Goal: replace the Anthropic SDK with a local Ollama client. Zero behavior change in routes — same inputs, same outputs, different inference backend.
 
-- [ ] Confirm `gemma4:26b` is responding via `curl http://localhost:11434/api/tags` before writing any code
-- [ ] Create `lib/ai/client.ts` — centralized Ollama wrapper with:
+- [x] Confirm `gemma4:26b` is responding via `curl http://localhost:11434/api/tags` before writing any code
+- [x] Create `lib/ai/client.ts` — centralized Ollama wrapper with:
   - Non-streaming JSON mode (for analyze, parse, timeline, network-check routes)
   - Streaming mode (for chat, appeal/draft routes)
   - `AbortSignal.timeout(30000)` on every fetch call

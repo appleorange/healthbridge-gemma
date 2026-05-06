@@ -30,3 +30,7 @@ Format for every entry:
 ---
 
 ## Gemma 4 migration lessons (append below as they occur)
+
+### [2026-05-06] Mistake: 30s timeout assumption broken by extended-thinking mode
+**Rule:** Always pass `think: false` in every Ollama request body when using `gemma4:26b`. Always set `OLLAMA_TIMEOUT_MS` to at least 120000 in `.env` for non-streaming calls on this hardware.
+**Why:** Gemma 4 defaults to extended-thinking mode, which generates `"thinking"` tokens before any `"content"` tokens. On this machine (~0.18 tok/s CPU inference), the thinking phase alone exceeds 30 seconds. `think: false` disables it and content starts immediately. Non-streaming still needs 120s+ because the full response at 0.18 tok/s takes 60-120s for typical JSON outputs.

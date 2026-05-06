@@ -1,15 +1,15 @@
 # HealthBridge Gemma — Project Status
 
-**Last Updated:** 2026-05-05
-**Current Phase:** Phase 1 — Ollama Client
+**Last Updated:** 2026-05-06
+**Current Phase:** Phase 1 — Ollama Client (in progress)
 
 ---
 
 ## Milestone Checklist
 
 ### Phase 1 — Ollama Client
-- [ ] Confirm `gemma4:26b` responding via curl
-- [ ] Create `lib/ai/client.ts` — Ollama wrapper
+- [x] Confirm `gemma4:26b` responding via curl
+- [x] Create `lib/ai/client.ts` — Ollama wrapper
 - [ ] Remove `@anthropic-ai/sdk` from package.json
 - [ ] Verify zero TypeScript errors after removal
 
@@ -40,22 +40,25 @@
 ## What's Done
 
 - Foundation files created: `CLAUDE.md`, `.env`, `.env.example`, `requirements.txt`, all `docs/` files, `.claude/commands/`
-- Existing codebase fully intact — no source files modified
+- `lib/ai/client.ts` created and verified — Ollama wrapper with `chat()`, `chatWithVision()`, `extractJSON<T>()`.
+  - Real response confirmed: Gemma 4 returned "Hello from Gemma" in streaming test
+  - `think: false` required to suppress extended-thinking mode on this model
 
 ## What's Next
 
-1. Confirm Ollama is running: `curl http://localhost:11434/api/tags`
-2. Confirm the model is available: `ollama list` (should show `gemma4:26b`)
-3. If confirmed, begin Phase 1, Task 2: create `lib/ai/client.ts`
+Phase 1, Task 3: Remove `@anthropic-ai/sdk` from `package.json`, run `npm install`, and verify `npm run build` passes with zero TypeScript errors.
 
-## Blockers
+## Blockers / Hardware Notes
 
-None known. Ollama status not yet confirmed.
+- `gemma4:26b` generates ~0.18 tok/s on this machine (CPU inference, Q4_K_M, 18GB model)
+- Non-streaming calls need `OLLAMA_TIMEOUT_MS=120000` in `.env` — 30s is too short for full responses
+- Streaming calls work fine within 30s (first token ~8s after request)
+- **Action required before Phase 2:** add `OLLAMA_TIMEOUT_MS=120000` to `.env`
 
 ---
 
 ## Notes
 
-- The existing `lib/api/anthropic.ts` has `extractJSON()` — this must be preserved in `lib/ai/client.ts` during Phase 1
-- All 8 routes use `lib/api/anthropic.ts` either directly or via re-exported utilities
-- Vision/multimodal support in `gemma4:26b` via Ollama should be verified before Phase 2 document/appeal/extract routes
+- The existing `lib/api/anthropic.ts` still present — will be deleted in Phase 2 after all routes migrate
+- `extractJSON<T>()` in `lib/ai/client.ts` now takes a typed fallback (improved over original which threw on failure)
+- Vision/multimodal support via Ollama verified at API level; functional test deferred to Phase 2 document routes
