@@ -18,8 +18,8 @@
   - `AbortSignal.timeout(30000)` on every fetch call
   - Reads `OLLAMA_BASE_URL` and `OLLAMA_MODEL` from environment — no hardcoded values
   - Re-exports `extractJSON()` utility (same logic as current `lib/api/anthropic.ts`)
-- [ ] Remove `@anthropic-ai/sdk` from `package.json` and run `npm install`
-- [ ] Verify `npm run build` passes with zero TypeScript errors after removal
+- [x] Remove `@anthropic-ai/sdk` from `package.json` and run `npm install`
+- [x] Verify `npm run build` passes with zero TypeScript errors after removal
 
 ---
 
@@ -27,23 +27,23 @@
 
 > Goal: swap every route that calls the Anthropic client to call `lib/ai/client.ts` instead. Routes must preserve all existing behavior: same Zod validation, same XML delimiters, same fallback logic, same response shape.
 
-- [ ] Swap `/api/chat` — streaming chat with `userProfile` context injected via `buildSystemPrompt()`
+- [x] Swap `/api/chat` — streaming chat with `userProfile` context injected via `buildSystemPrompt()`
   - Preserve: SSE streaming, 20-message session limit, XML user-input delimiters
-- [ ] Swap `/api/appeal/analyze` — structured JSON output, Zod-validated
+- [x] Swap `/api/appeal/analyze` — structured JSON output, Zod-validated
   - Preserve: JSON extraction fallback logic, safe fallback object on parse failure
-- [ ] Swap `/api/appeal/draft` — streaming plain text letter
+- [x] Swap `/api/appeal/draft` — streaming plain text letter
   - Preserve: SSE streaming, XML delimiters on all user-supplied denial fields
-- [ ] Swap `/api/appeal/extract` — extract denial info from uploaded document (multimodal)
-  - Note: verify Ollama vision support for `gemma4:26b` before implementing
-- [ ] Swap `/api/documents/parse` — vision/multimodal, highest risk
-  - Test carefully with a real denial letter PDF and an image
-  - Preserve: base64 encoding, file type validation, 3-document session limit
-- [ ] Swap `/api/network-check` — prompt swap; CMS Healthcare.gov primary path unchanged
+- [x] Swap `/api/appeal/extract` — extract denial info from uploaded document (multimodal)
+  - Note: PDF not supported by Ollama vision — returns 422 with user-facing message; image input works
+- [x] Swap `/api/documents/parse` — vision/multimodal
+  - Preserve: base64 encoding, file type validation; PDF replaced with 422 (Ollama limitation)
+- [x] Swap `/api/network-check` — prompt swap; CMS Healthcare.gov primary path unchanged
   - Preserve: CMS API call first, AI fallback only when CMS returns no results
-- [ ] Swap `/api/timeline/generate` — structured JSON output, Zod-validated
+- [x] Swap `/api/timeline/generate` — structured JSON output, Zod-validated
   - Preserve: JSON extraction, `TimelineEvent[]` shape validation
-- [ ] Swap `/api/checklist` — structured JSON output
+- [x] Swap `/api/checklist` — structured JSON output
   - Preserve: action item shape, fallback to empty array on parse failure
+- [x] Swap `/api/eligibility` — visaEligibilitySummary generation (non-fatal AI enhancement)
 
 ---
 

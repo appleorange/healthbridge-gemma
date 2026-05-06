@@ -1,4 +1,4 @@
-import { anthropic as client } from '@/lib/api/anthropic'
+import { chat } from '@/lib/ai/client'
 import { buildSystemPrompt } from '@/lib/prompts/system'
 import { ChatRequestSchema } from '@/lib/validation/schemas'
 
@@ -18,26 +18,49 @@ export async function POST(req: Request) {
       userProfile as unknown as Record<string, unknown>
     )
 
-    const stream = await client.messages.stream({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1500,
-      system: systemPrompt,
-      messages,
-    })
+    const ollamaStream = await chat(messages, systemPrompt, true)
 
-    // Return a streaming response
     const encoder = new TextEncoder()
     const readable = new ReadableStream({
       async start(controller) {
-        for await (const chunk of stream) {
-          if (
-            chunk.type === 'content_block_delta' &&
-            chunk.delta.type === 'text_delta'
-          ) {
-            controller.enqueue(encoder.encode(chunk.delta.text))
+        const decoder = new TextDecoder()
+        const reader = ollamaStream.getReader()
+        let buffer = ''
+
+        try {
+          while (true) {
+            const { value, done } = await reader.read()
+            if (done) break
+
+            buffer += decoder.decode(value, { stream: true })
+            const lines = buffer.split('\n')
+            buffer = lines.pop() ?? ''
+
+            for (const line of lines) {
+              const trimmed = line.trim()
+              if (!trimmed) continue
+              try {
+                const json = JSON.parse(trimmed) as { message?: { content?: string }; done?: boolean }
+                if (json.message?.content) {
+                  controller.enqueue(encoder.encode(json.message.content))
+                }
+              } catch { /* malformed line, skip */ }
+            }
           }
+
+          // flush remaining buffer
+          if (buffer.trim()) {
+            try {
+              const json = JSON.parse(buffer.trim()) as { message?: { content?: string } }
+              if (json.message?.content) {
+                controller.enqueue(encoder.encode(json.message.content))
+              }
+            } catch { /* ignore */ }
+          }
+        } finally {
+          controller.close()
+          reader.releaseLock()
         }
-        controller.close()
       },
     })
 

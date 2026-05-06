@@ -1,4 +1,4 @@
-import { anthropic as client, extractJSON } from '@/lib/api/anthropic'
+import { chat, extractJSON } from '@/lib/ai/client'
 import { NetworkCheckRequestSchema } from '@/lib/validation/schemas'
 
 export const runtime = 'nodejs'
@@ -28,6 +28,13 @@ const KNOWN_SYSTEMS: Record<string, string> = {
   'stanford': 'Stanford Health Care participates in many PPO networks in the Bay Area.',
   'dignity': 'Dignity Health / CommonSpirit participates in most major insurance networks.',
   'hca': 'HCA Healthcare hospitals participate in most major insurance networks.',
+}
+
+const AI_FALLBACK = {
+  inNetwork: null as boolean | null,
+  reasoning: 'Unable to estimate.',
+  confidence: 'unknown' as const,
+  suggestion: 'Call the member services number on your insurance card to verify.',
 }
 
 export async function POST(req: Request) {
@@ -85,10 +92,8 @@ export async function POST(req: Request) {
     const providerLower = providerName.toLowerCase()
     const systemNote = Object.entries(KNOWN_SYSTEMS).find(([key]) => providerLower.includes(key))?.[1] ?? ''
 
-    const message = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 500,
-      messages: [{
+    const text = await chat(
+      [{
         role: 'user',
         content: `A patient wants to check if their doctor/hospital is in-network for their health insurance plan.
 
@@ -117,15 +122,11 @@ Respond ONLY with valid JSON, no other text:
   "suggestion": "what to do to verify"
 }`,
       }],
-    })
+      '',
+      false
+    )
 
-    const text = message.content[0].type === 'text' ? message.content[0].text : '{}'
-    let aiResult: { inNetwork: boolean | null; reasoning: string; confidence: 'likely' | 'unlikely' | 'unknown'; suggestion: string }
-    try {
-      aiResult = extractJSON(text) as typeof aiResult
-    } catch {
-      aiResult = { inNetwork: null, reasoning: 'Unable to estimate.', confidence: 'unknown', suggestion: 'Call the member services number on your insurance card to verify.' }
-    }
+    const aiResult = extractJSON<typeof AI_FALLBACK>(text, AI_FALLBACK)
 
     return Response.json({
       providerName,

@@ -1,8 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { anthropic as client, extractJSON } from '@/lib/api/anthropic'
+import { chat, extractJSON } from '@/lib/ai/client'
 import { AppealAnalyzeRequestSchema } from '@/lib/validation/schemas'
 
 export const runtime = 'nodejs'
+
+const ANALYZE_FALLBACK = {
+  denialType: 'Unable to parse denial type',
+  appealableIssues: ['Request the specific reason for denial in writing', 'Ask for the clinical criteria used'],
+  recommendedApproach: 'File a formal written appeal citing your right to a full and fair review under the ACA.',
+  successLikelihood: 'medium',
+  supportingDocuments: ['Letter of medical necessity from your doctor', 'Relevant medical records', 'Copy of the denial letter'],
+  keyArguments: ['You have the right to appeal any denial', 'Request the specific clinical criteria used', 'Ask for an independent external review if internal appeal fails'],
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,10 +22,8 @@ export async function POST(req: NextRequest) {
     }
     const { planName, denialReason, denialDate, serviceDescription, denialCode, policyLanguage, planType, immigrationStatus, state } = parsed.data
 
-    const message = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1024,
-      messages: [
+    const text = await chat(
+      [
         {
           role: 'user',
           content: `You are an expert health insurance appeals specialist. Analyze this denial and respond ONLY with JSON.
@@ -50,22 +57,11 @@ Respond ONLY with this JSON structure, no markdown:
 }`,
         },
       ],
-    })
+      '',
+      false
+    )
 
-    const text = message.content[0].type === 'text' ? message.content[0].text : ''
-    let analysis
-    try {
-      analysis = extractJSON(text)
-    } catch {
-      analysis = {
-        denialType: 'Unable to parse denial type',
-        appealableIssues: ['Request the specific reason for denial in writing', 'Ask for the clinical criteria used'],
-        recommendedApproach: 'File a formal written appeal citing your right to a full and fair review under the ACA.',
-        successLikelihood: 'medium',
-        supportingDocuments: ['Letter of medical necessity from your doctor', 'Relevant medical records', 'Copy of the denial letter'],
-        keyArguments: ['You have the right to appeal any denial', 'Request the specific clinical criteria used', 'Ask for an independent external review if internal appeal fails'],
-      }
-    }
+    const analysis = extractJSON(text, ANALYZE_FALLBACK)
     return NextResponse.json(analysis)
   } catch (err) {
     console.error('Appeal analyze error:', err)

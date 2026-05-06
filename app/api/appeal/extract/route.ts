@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { anthropic as client, extractJSON } from '@/lib/api/anthropic'
+import { chatWithVision, extractJSON } from '@/lib/ai/client'
 import { z } from 'zod'
 
 export const runtime = 'nodejs'
@@ -8,6 +8,15 @@ const ExtractRequestSchema = z.object({
   fileData: z.string().min(1),
   mimeType: z.enum(['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf']),
 })
+
+const EXTRACT_FALLBACK = {
+  planName: null as string | null,
+  denialCode: null as string | null,
+  denialReason: null as string | null,
+  serviceDescription: null as string | null,
+  denialDate: null as string | null,
+  policyLanguage: null as string | null,
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,15 +27,19 @@ export async function POST(req: NextRequest) {
     }
     const { fileData, mimeType } = parsed.data
 
-    const isPDF = mimeType === 'application/pdf'
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const content: any[] = [
-      isPDF
-        ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: fileData } }
-        : { type: 'image', source: { type: 'base64', media_type: mimeType, data: fileData } },
-      {
-        type: 'text',
-        text: `This is an insurance denial letter or Explanation of Benefits (EOB). Extract the following and respond ONLY with valid JSON — no markdown, no explanation:
+    // Ollama vision requires image input — PDF not supported with local inference
+    if (mimeType === 'application/pdf') {
+      return Response.json(
+        { error: 'PDF parsing is not supported with the local AI backend. Please upload an image (JPEG or PNG) of the denial letter instead.' },
+        { status: 422 }
+      )
+    }
+
+    const text = await chatWithVision(
+      [
+        {
+          role: 'user',
+          content: `This is an insurance denial letter or Explanation of Benefits (EOB). Extract the following and respond ONLY with valid JSON — no markdown, no explanation:
 {
   "planName": "insurance company or plan name as written in the document",
   "denialCode": "denial code, CARC/RARC adjustment reason code, or remark code (e.g. CO-4, PR-96, N130) — null if not present",
@@ -35,19 +48,13 @@ export async function POST(req: NextRequest) {
   "denialDate": "date of denial in YYYY-MM-DD format — null if not found",
   "policyLanguage": "the specific policy clause, contract language, or clinical criteria cited verbatim as the basis for denial — null if not present"
 }`,
-      },
-    ]
+        },
+      ],
+      '',
+      [fileData]
+    )
 
-    const response = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1000,
-      messages: [{ role: 'user', content }],
-    })
-
-    const block = response.content?.[0]
-    if (!block || block.type !== 'text') throw new Error('Claude returned no text content')
-
-    const raw = extractJSON(block.text) as Record<string, unknown>
+    const raw = extractJSON<typeof EXTRACT_FALLBACK>(text, EXTRACT_FALLBACK)
     const result = {
       planName: typeof raw.planName === 'string' ? raw.planName : null,
       denialCode: typeof raw.denialCode === 'string' ? raw.denialCode : null,

@@ -1,6 +1,6 @@
 export const runtime = 'nodejs'
 
-import { anthropic as client } from '@/lib/api/anthropic'
+import { chat, extractJSON } from '@/lib/ai/client'
 import { ChecklistRequestSchema } from '@/lib/validation/schemas'
 import type { ChecklistItem } from '@/types'
 
@@ -74,24 +74,14 @@ Rules:
 
 Return only valid JSON — no markdown fences, no explanation.${language === 'es' ? '\n\nWrite all title and detail fields in Spanish.' : ''}`
 
-    const response = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1500,
-      messages: [{ role: 'user', content: prompt }],
-    })
+    const text = await chat(
+      [{ role: 'user', content: prompt }],
+      '',
+      false
+    )
 
-    const block = response.content?.[0]
-    if (!block || block.type !== 'text') throw new Error('Claude returned no text content')
-
-    let items: unknown
-    try {
-      items = JSON.parse(block.text.trim())
-    } catch {
-      const cleaned = block.text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-      items = JSON.parse(cleaned)
-    }
-
-    if (!Array.isArray(items)) throw new Error('Expected array from Claude')
+    const items = extractJSON<unknown[]>(text, [])
+    if (!Array.isArray(items)) throw new Error('Expected array from model')
 
     const VALID_CATEGORIES = new Set(['document', 'call', 'action', 'deadline'])
     const safeItems: ChecklistItem[] = (items as unknown[])

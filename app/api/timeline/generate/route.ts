@@ -1,4 +1,4 @@
-import { anthropic as client, extractJSON } from '@/lib/api/anthropic'
+import { chat, extractJSON } from '@/lib/ai/client'
 import type { TimelineEvent } from '@/types'
 import { TimelineRequestSchema } from '@/lib/validation/schemas'
 
@@ -21,20 +21,13 @@ ${JSON.stringify(profile, null, 2)}
 Eligibility result:
 ${JSON.stringify({ primaryRecommendation: eligibilityResult.primaryRecommendation, eligiblePlans: eligibilityResult.eligiblePlans, specialCircumstances: eligibilityResult.specialCircumstances }, null, 2)}`
 
-    const message = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1000,
-      messages: [{ role: 'user', content: prompt }],
-    })
+    const text = await chat(
+      [{ role: 'user', content: prompt }],
+      '',
+      false
+    )
 
-    const text = message.content[0].type === 'text' ? message.content[0].text : '[]'
-
-    let rawEvents: Partial<TimelineEvent>[]
-    try {
-      rawEvents = extractJSON(text) as Partial<TimelineEvent>[]
-    } catch {
-      return Response.json({ events: [] })
-    }
+    const rawEvents = extractJSON<Partial<TimelineEvent>[]>(text, [])
 
     // Validate and tag each event as AI-sourced
     const events: TimelineEvent[] = rawEvents

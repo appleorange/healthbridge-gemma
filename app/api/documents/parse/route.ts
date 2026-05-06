@@ -1,4 +1,4 @@
-import { anthropic as client, extractJSON } from '@/lib/api/anthropic'
+import { chatWithVision, extractJSON } from '@/lib/ai/client'
 import { DocumentParseRequestSchema } from '@/lib/validation/schemas'
 import { getFPLPercent } from '@/lib/constants/fpl'
 
@@ -40,36 +40,39 @@ export async function POST(req: Request) {
     }
     const { fileData, mimeType, fileName, userProfile } = parsed.data
 
-    const isPDF = mimeType === 'application/pdf'
+    // Ollama vision requires image input — PDF parsing not supported with local inference
+    if (mimeType === 'application/pdf') {
+      return Response.json(
+        { error: 'PDF parsing is not supported with the local AI backend. Please upload an image (JPEG or PNG) of the document instead.' },
+        { status: 422 }
+      )
+    }
 
     const userContext = userProfile
       ? `\n\nUser context: ${userProfile.immigrationStatus} status, ${userProfile.state} state, household income at approximately ${Math.round(getFPLPercent(userProfile.annualIncome, userProfile.householdSize))}% FPL.`
       : ''
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const content: any[] = [
-      isPDF
-        ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: fileData } }
-        : { type: 'image', source: { type: 'base64', media_type: mimeType, data: fileData } },
-      {
-        type: 'text',
-        text: `Please analyze this document (filename: ${fileName}) and extract all relevant health insurance information.${userContext}`,
-      },
-    ]
+    const text = await chatWithVision(
+      [
+        {
+          role: 'user',
+          content: `Please analyze this document (filename: ${fileName}) and extract all relevant health insurance information.${userContext}`,
+        },
+      ],
+      PARSE_SYSTEM,
+      [fileData]
+    )
 
-    const response = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 2000,
-      system: PARSE_SYSTEM,
-      messages: [{ role: 'user', content }],
-    })
+    const PARSE_FALLBACK: Record<string, unknown> = {
+      documentType: 'unknown',
+      summary: 'Could not parse document — the file may be too complex or low quality. Try a clearer scan or a different page.',
+      extractedFields: [],
+      deadlines: [],
+      planDetails: { deductible: null, outOfPocketMax: null, networkType: null, premium: null, coinsurance: null, copays: {} },
+    }
 
-    const text = response.content[0].type === 'text' ? response.content[0].text : ''
-
-    let result: Record<string, unknown>
-    try {
-      result = extractJSON(text) as Record<string, unknown>
-    } catch {
+    const result = extractJSON<Record<string, unknown>>(text, PARSE_FALLBACK)
+    if (result === PARSE_FALLBACK) {
       throw new Error('Could not parse document — the file may be too complex or low quality. Try a clearer scan or a different page.')
     }
 

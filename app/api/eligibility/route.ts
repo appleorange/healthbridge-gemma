@@ -1,4 +1,4 @@
-import { anthropic as client } from '@/lib/api/anthropic'
+import { chat } from '@/lib/ai/client'
 import { calculateEligibility } from '@/lib/eligibility/engine'
 import { EligibilityRequestSchema } from '@/lib/validation/schemas'
 import type { UserProfile, EligibilityResult } from '@/types'
@@ -77,15 +77,11 @@ Write 2–4 sentences that explain this person's situation in completely plain l
 
 Write directly to the user ("you" / "your"). Warm and clear, like a knowledgeable friend. No bullet points — flowing sentences only. No heading. No preamble.${language === 'es' ? '\n\nRespond entirely in Spanish.' : ''}`
 
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 400,
-    messages: [{ role: 'user', content: prompt }],
-  })
-
-  const block = response.content?.[0]
-  if (!block || block.type !== 'text') throw new Error('Claude returned no text content')
-  return block.text.trim()
+  return await chat(
+    [{ role: 'user', content: prompt }],
+    '',
+    false
+  )
 }
 
 export async function POST(req: Request) {

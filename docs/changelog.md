@@ -2,6 +2,26 @@
 
 ---
 
+## [2026-05-06] Phase 2 — All API routes migrated to Ollama
+
+Migrated all 9 routes from `@anthropic-ai/sdk` to `lib/ai/client.ts`. Zero TypeScript errors. App loads and serves 200.
+
+**Routes migrated:**
+- `/api/chat` — streaming: NDJSON→plain text pipe; Ollama stream decoded via `ReadableStream` reader
+- `/api/appeal/analyze` — JSON mode: `extractJSON<T>(text, fallback)` replaces try/catch pattern
+- `/api/appeal/draft` — streaming: same NDJSON→text pattern as `/api/chat`
+- `/api/documents/parse` — vision: `chatWithVision()` with base64 images array; PDF returns 422 (Ollama limitation)
+- `/api/appeal/extract` — vision: same pattern as documents/parse; PDF returns 422
+- `/api/network-check` — JSON mode: CMS primary path untouched; AI fallback swapped
+- `/api/timeline/generate` — JSON mode: direct swap, `extractJSON` with typed `[]` fallback
+- `/api/checklist` — JSON mode: custom JSON parsing replaced with `extractJSON`
+- `/api/eligibility` — text mode: `generateVisaSummary()` swapped to `chat(..., false)`
+
+**Breaking change:** `lib/api/anthropic.ts` deleted; `@anthropic-ai/sdk` was already absent from `package.json`.
+**Known limitation:** PDF parsing not supported by Ollama's vision API — both vision routes return 422 for PDFs with a clear user-facing message.
+
+---
+
 ## [2026-05-06] Phase 1 — lib/ai/client.ts created
 
 - Created `lib/ai/client.ts`: centralized Ollama wrapper replacing `lib/api/anthropic.ts`
