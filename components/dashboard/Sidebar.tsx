@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Shield, Home, Compass, Wrench, HelpCircle, RotateCcw, Menu, X } from 'lucide-react'
 import LanguageToggle from '@/components/ui/LanguageToggle'
+import NetworkStatusBadge from '@/components/ui/NetworkStatusBadge'
 import { useLanguage } from '@/hooks/useLanguage'
 
 const STALE_KEYS = ['hb_eligibility', 'hb_profile', 'hb_plan_cards', 'hb_plans_fetched', 'hb_compare_list', 'hb_chat_messages', 'hb_message_count', 'hb_doc_count', 'hb_appeal_count', 'hb_documents']
@@ -80,6 +81,7 @@ function NavContent({ onLinkClick }: { onLinkClick?: () => void }) {
           {lang === 'es' ? 'Empezar de nuevo' : 'Start over'}
         </button>
       </div>
+      <NetworkStatusBadge />
     </div>
   )
 }

@@ -1,7 +1,7 @@
 # HealthBridge Gemma — Project Status
 
 **Last Updated:** 2026-05-06
-**Current Phase:** Phase 3 — Offline-First Layer
+**Current Phase:** Phase 4 — Hackathon Polish
 
 ---
 
@@ -25,10 +25,10 @@
 - [x] `/api/eligibility` — text mode (visaEligibilitySummary)
 
 ### Phase 3 — Offline-First Layer
-- [ ] Audit external HTTP calls
-- [ ] Build Healthcare.gov offline cache
-- [ ] Add network status detector to UI
-- [ ] Add TrustBanner to dashboard
+- [x] Audit external HTTP calls
+- [x] Build Healthcare.gov offline cache
+- [x] Add network status detector to UI
+- [x] Add NetworkStatusBadge to dashboard sidebar
 
 ### Phase 4 — Hackathon Polish
 - [ ] 25-case eligibility test matrix
@@ -44,14 +44,19 @@
 - All 9 API routes migrated from Anthropic SDK to Ollama; `lib/api/anthropic.ts` deleted
 - Zero TypeScript errors; app loads and serves 200
 - All routes curl-tested: streaming routes stream, JSON routes return valid objects
+- `lib/cache/plans.ts` — static ACA fallback data (Bronze/Silver/Gold, CA/NY/TX/FL/WA)
+- `lib/plans/plan-finder.ts` — try/catch around CMS fetch; returns `{ plans, cached: true }` on failure
+- `explore/page.tsx` — "Showing sample plans" banner shown when `cached: true`
+- `components/ui/NetworkStatusBadge.tsx` — real-time online/offline indicator in sidebar
+- `Sidebar.tsx` — NetworkStatusBadge wired into NavContent (desktop + mobile drawer)
 
 ## What's Next
 
-Phase 3: Offline-First Layer
-1. Audit which routes call external APIs (Healthcare.gov, CMS)
-2. Build `lib/plans/offline-cache.json` for Healthcare.gov plan data
-3. Add `navigator.onLine` network status detector to UI
-4. Wire `TrustBanner.tsx` into dashboard layout
+Phase 4: Hackathon Polish
+1. Run 25-case eligibility test matrix; document Gemma 4 regressions
+2. Fix prompt regressions (JSON-only output, length constraints)
+3. Full offline demo run (ethernet unplugged, complete onboarding→chat flow)
+4. Writeup draft
 
 ## Known Limitations
 

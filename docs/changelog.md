@@ -2,6 +2,21 @@
 
 ---
 
+## [2026-05-06] Phase 3 — Offline-First Layer complete
+
+**Part A — Healthcare.gov offline fallback:**
+- `lib/cache/plans.ts`: static Bronze/Silver/Gold ACA plan data for CA/NY/TX/FL/WA + generic fallback
+- `lib/plans/plan-finder.ts`: wraps CMS fetch in try/catch; returns `{ plans, cached: true }` on network failure
+- `/api/plans`: passes `cached` flag through to client
+- `app/dashboard/explore/page.tsx`: shows "Showing sample plans — connect to internet for real-time data" banner when `cached: true`
+
+**Part B — Offline indicator UI:**
+- `components/ui/NetworkStatusBadge.tsx`: new client component — listens to `navigator.onLine` + `online`/`offline` window events; shows muted-green "Local AI — your data stays on this device" badge always; adds amber "● Offline mode" row when offline
+- `components/dashboard/Sidebar.tsx`: `NetworkStatusBadge` added at bottom of `NavContent` — visible on every dashboard page (desktop sidebar + mobile drawer)
+- Zero TypeScript errors
+
+---
+
 ## [2026-05-06] Phase 2 — All API routes migrated to Ollama
 
 Migrated all 9 routes from `@anthropic-ai/sdk` to `lib/ai/client.ts`. Zero TypeScript errors. App loads and serves 200.

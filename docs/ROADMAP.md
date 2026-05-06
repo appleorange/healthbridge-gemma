@@ -51,14 +51,14 @@
 
 > Goal: the full user flow (onboarding → eligibility → plans → chat) must work with ethernet unplugged.
 
-- [ ] Audit all external HTTP calls — list every route that calls Healthcare.gov or any other external API
-- [ ] Build offline fallback cache for Healthcare.gov plan data
-  - Cache as static JSON at `lib/plans/offline-cache.json`
+- [x] Audit all external HTTP calls — list every route that calls Healthcare.gov or any other external API
+- [x] Build offline fallback cache for Healthcare.gov plan data
+  - Cache as static data at `lib/cache/plans.ts`
   - Serve cache when Healthcare.gov API returns a network error or timeout
-- [ ] Add network status detector to UI
-  - Show a banner or badge when navigator.onLine is false
-- [ ] Add persistent "Running locally — no data transmitted" badge to dashboard
-  - Component: `components/ui/TrustBanner.tsx` (file already exists — integrate if not already showing)
+- [x] Add network status detector to UI
+  - `NetworkStatusBadge` listens to `navigator.onLine` + window events; shows offline indicator in amber
+- [x] Add persistent "Running locally — no data transmitted" badge to dashboard
+  - `components/ui/NetworkStatusBadge.tsx` wired into `Sidebar.tsx` `NavContent` — visible on every dashboard page
 
 ---
 
