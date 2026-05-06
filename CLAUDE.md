@@ -18,6 +18,14 @@ Do not skip this checklist. Do not write code before completing it.
 
 **Plan before code.** For any non-trivial change, enter plan mode first. State what files will change, what the interface contract is, and what could go wrong. Get agreement before writing code.
 
+**Commit and push after every major change.** After completing any route migration, new feature, bug fix, or doc update — commit with a descriptive message referencing the ROADMAP task, then push the current feature branch to origin. Do not let work accumulate uncommitted across tasks.
+
+**Write and run tests as you work.** Before marking any task done:
+- For API routes: write a `curl` test and confirm the expected response shape
+- For utility functions: write a temporary `scripts/test-*.ts`, run it with `npx tsx`, confirm output, then delete it
+- For TypeScript changes: run `npx tsc --noEmit` and confirm zero new errors after every file change
+- Never mark a task complete based on "it should work" — always confirm with a real execution
+
 **Subagents for isolated work.** Use subagents for research, codebase exploration, and parallel analysis. One focused task per subagent — never multiplex unrelated work.
 
 **Verify before marking done.** A task is not complete until:
