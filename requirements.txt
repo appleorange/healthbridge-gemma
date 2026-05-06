@@ -1,0 +1,17 @@
+# HealthBridge Gemma — Runtime Requirements
+# This file is for hackathon judges' reference only.
+# These are NOT Python packages — this is a Next.js project.
+
+# AI Inference
+Ollama >= 0.6          (https://ollama.com/download)
+gemma4:26b             (run: ollama pull gemma4:26b — ~17GB download)
+
+# Node.js Runtime
+Node.js >= 18
+npm >= 9
+
+# To verify your environment is ready:
+#   curl http://localhost:11434/api/tags              # Ollama is running
+#   ollama run gemma4:26b "say hello"                 # Model is responding
+#   node --version                                    # Node >= 18
+#   npm --version                                     # npm >= 9
