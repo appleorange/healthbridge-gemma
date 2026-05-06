@@ -132,7 +132,7 @@ export default function ChatInterface({ userProfile, autoSendPrompt, onAutoPromp
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: apiMessages, userProfile }),
-        signal: AbortSignal.timeout(30000),
+        signal: AbortSignal.timeout(300000),
       })
 
       if (!res.body) throw new Error('No stream')
@@ -153,7 +153,7 @@ export default function ChatInterface({ userProfile, autoSendPrompt, onAutoPromp
       console.error(e)
       setMessages(prev => prev.map(m =>
         m.id === assistantId
-          ? { ...m, content: `Sorry, something went wrong: ${e instanceof Error ? e.message : 'Unknown error'}. Check that your API key is set in .env.local and restart the dev server.` }
+          ? { ...m, content: `Sorry, I couldn't get a response — the AI may still be generating. Try again, or ask a shorter question.` }
           : m
       ))
     } finally {

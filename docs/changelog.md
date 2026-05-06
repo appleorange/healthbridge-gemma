@@ -2,6 +2,24 @@
 
 ---
 
+## [2026-05-06] Bug fixes — chat abort, false offline banner, slowness
+
+**Issue 1 — Chat stream abort:**
+- `lib/ai/client.ts`: streaming calls now use `OLLAMA_STREAM_TIMEOUT_MS` (default 300s) instead of the 30s non-streaming timeout; non-streaming uses `OLLAMA_TIMEOUT_MS` (now 120s)
+- `components/chat/ChatInterface.tsx`: frontend fetch timeout raised from 30s to 300s (matches server stream timeout)
+- `ChatInterface.tsx`: replaced hardcoded Anthropic "Check API key" error message with a generic retry message
+
+**Issue 2 — False "Showing sample plans" when online:**
+- `lib/plans/plan-finder.ts`: `fetchACAPlans` now propagates network errors (TypeError from fetch) instead of swallowing all errors
+- `getPlansForProfile` only serves the static cache (cached:true) on genuine network failures; API errors (401, 400, etc.) and 0-result responses now return mocked estimated plans with `cached:false`
+- Added `AbortSignal.timeout(10000)` to Healthcare.gov fetch to prevent indefinite hangs
+
+**Issue 3 — General slowness:**
+- `.env`: `OLLAMA_TIMEOUT_MS` raised from 30000 → 120000 (non-streaming routes no longer timeout mid-generation)
+- `lib/prompts/system.ts`: `BASE_HEALTHCARE_PROMPT` trimmed from ~485 words to ~110 words; STATUS_PROMPTS carry all visa-specific knowledge
+
+---
+
 ## [2026-05-06] Phase 3 — Offline-First Layer complete
 
 **Part A — Healthcare.gov offline fallback:**

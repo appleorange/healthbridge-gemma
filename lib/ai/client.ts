@@ -1,8 +1,8 @@
 const BASE_URL = process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434'
 const MODEL = process.env.OLLAMA_MODEL ?? 'gemma4:e4b'
-// Default 30s for streaming (first token arrives quickly); set OLLAMA_TIMEOUT_MS higher
-// for non-streaming on hardware where full response generation exceeds 30 seconds.
-const TIMEOUT_MS = parseInt(process.env.OLLAMA_TIMEOUT_MS ?? '30000', 10)
+const TIMEOUT_MS = parseInt(process.env.OLLAMA_TIMEOUT_MS ?? '120000', 10)
+// Streaming responses can take several minutes at low tok/s — use a separate, much longer timeout.
+const STREAM_TIMEOUT_MS = parseInt(process.env.OLLAMA_STREAM_TIMEOUT_MS ?? '300000', 10)
 
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant'
@@ -49,7 +49,7 @@ export async function chat(
       stream,
       think: false,
     }),
-    signal: AbortSignal.timeout(TIMEOUT_MS),
+    signal: AbortSignal.timeout(stream ? STREAM_TIMEOUT_MS : TIMEOUT_MS),
   })
 
   if (!res.ok) {

@@ -105,7 +105,7 @@ async function fetchACAPlans(profile: UserProfile): Promise<PlanCard[]> {
   const income = profile.annualIncome || 30000
   const apiKey = process.env.HEALTHCARE_GOV_API_KEY || 'a94d697d-5fe2-43d5-b829-fbf1d52d9c49'
 
-  try {
+  {
     const countyFips = await fetchCountyFips(profile.zipCode, apiKey)
 
     // APTC eligible if income is between 100% and 400% FPL (single person ~$15,650 in 2026)
@@ -134,13 +134,16 @@ async function fetchACAPlans(profile: UserProfile): Promise<PlanCard[]> {
       year,
     }
 
+    // Network errors (TypeError: Failed to fetch) propagate to caller — only catch JSON errors.
     const res = await fetch(
       `https://marketplace.api.healthcare.gov/api/v1/plans/search?apikey=${apiKey}`,
-      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(10000) }
     )
 
-    if (!res.ok) return []
-    const data = await res.json()
+    if (!res.ok) return []   // API error (401, 400, 429, etc.) — not a network failure
+
+    let data: { plans?: Record<string, unknown>[] } = {}
+    try { data = await res.json() as { plans?: Record<string, unknown>[] } } catch { return [] }
 
     const plans: Omit<PlanCard, 'fitScore' | 'fitReasons'>[] = (data.plans ?? []).slice(0, 6).map((p: Record<string, unknown>) => {
       const benefits = buildBenefitChips(p)
@@ -173,9 +176,6 @@ async function fetchACAPlans(profile: UserProfile): Promise<PlanCard[]> {
       const { score, reasons } = calcFitScore(p, profile)
       return { ...p, fitScore: score, fitReasons: reasons }
     }).sort((a, b) => b.fitScore - a.fitScore)
-
-  } catch {
-    return []
   }
 }
 
@@ -549,18 +549,34 @@ export async function getPlansForProfile(
 
   // Fetch real ACA plans if in eligiblePlans and ZIP is available
   if (eligiblePlans.includes('aca_marketplace') && profile.zipCode) {
-    const realAca = await fetchACAPlans(profile)
+    let realAca: PlanCard[] = []
+    let networkFailure = false
+    try {
+      realAca = await fetchACAPlans(profile)
+    } catch {
+      // Only genuine network errors (TypeError: Failed to fetch, AbortError) reach here.
+      networkFailure = true
+    }
+
+    if (networkFailure) {
+      // Offline or unreachable — serve state-specific cached ACA plans
+      getCachedACAPlans(profile.state).forEach(p => allCards.push(p))
+      const nonAcaTypes = eligiblePlans.filter(t => t !== 'aca_marketplace')
+      buildMockedCards(profile, nonAcaTypes).forEach(p => allCards.push(p))
+      return { plans: finalizePlans(allCards, primaryRecommendation, profile), cached: true }
+    }
+
     if (realAca.length > 0) {
       realAca.forEach(p => allCards.push(p))
       const nonAcaTypes = eligiblePlans.filter(t => t !== 'aca_marketplace')
       buildMockedCards(profile, nonAcaTypes).forEach(p => allCards.push(p))
       return { plans: finalizePlans(allCards, primaryRecommendation, profile), cached: false }
     }
-    // API returned empty (network failure) → serve state-specific cached ACA plans
-    getCachedACAPlans(profile.state).forEach(p => allCards.push(p))
-    const nonAcaTypes = eligiblePlans.filter(t => t !== 'aca_marketplace')
-    buildMockedCards(profile, nonAcaTypes).forEach(p => allCards.push(p))
-    return { plans: finalizePlans(allCards, primaryRecommendation, profile), cached: true }
+
+    // API reachable but returned 0 plans (bad API key, 0 results for ZIP, etc.)
+    // Show mocked estimates — not "cached" since the user is online
+    buildMockedCards(profile, eligiblePlans).forEach(p => allCards.push(p))
+    return { plans: finalizePlans(allCards, primaryRecommendation, profile), cached: false }
   }
 
   // No ACA in eligible plans or no ZIP — use mocked cards only
