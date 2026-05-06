@@ -1,5 +1,5 @@
 const BASE_URL = process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434'
-const MODEL = process.env.OLLAMA_MODEL ?? 'gemma4:26b'
+const MODEL = process.env.OLLAMA_MODEL ?? 'gemma4:e4b'
 // Default 30s for streaming (first token arrives quickly); set OLLAMA_TIMEOUT_MS higher
 // for non-streaming on hardware where full response generation exceeds 30 seconds.
 const TIMEOUT_MS = parseInt(process.env.OLLAMA_TIMEOUT_MS ?? '30000', 10)
