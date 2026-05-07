@@ -50,6 +50,7 @@ export const UserProfileSchema = z.object({
   yearsLeftInCollege: z.enum(['less_than_1', '1_to_2', '2_to_4', '4_plus']).optional(),
   schoolRequiresInsurance: z.boolean().optional(),
   // Optional dependent fields
+  dependentsHaveUSCitizenChild: z.boolean().optional(),
   dependentCoverageEndDate: z.string().max(50).optional(),
   dependentOnWhom: z.enum(['parent', 'spouse', 'partner']).optional(),
   parentPlanInsurer: z.string().max(200).optional(),

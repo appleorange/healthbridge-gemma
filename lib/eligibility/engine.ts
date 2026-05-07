@@ -827,12 +827,21 @@ export function calculateEligibility(profile: UserProfile): EligibilityResult {
     }, primaryResultNodeId, 'Next step')
   }
 
+  // IRC § 36B prohibits APTC for months a person is enrolled in Medicare — suppress the flag
+  // when Medicare is the primary recommendation so it doesn't mislead the user.
+  // TODO: Model Medicare Savings Programs (QMB/SLMB/QI) as a separate low-income supplement
+  // path for Medicare-primary users who may qualify for premium/cost-sharing help.
+  if (adjustedPrimary === 'medicare') {
+    const aptcIdx = circumstances.findIndex(c => c.startsWith('You may qualify for a Premium Tax Credit'))
+    if (aptcIdx !== -1) circumstances.splice(aptcIdx, 1)
+  }
+
   return {
     eligiblePlans: eligible,
     ineligiblePlans: ineligible,
     primaryRecommendation: adjustedPrimary,
     bestOptionReasoning,
-    subsidyEligible: aptcStatusEligible && fplPct >= 100 && fplPct <= 400,
+    subsidyEligible: adjustedPrimary !== 'medicare' && aptcStatusEligible && fplPct >= 100 && fplPct <= 400,
     estimatedSubsidy: undefined,
     costEstimates,
     specialCircumstances: circumstances,

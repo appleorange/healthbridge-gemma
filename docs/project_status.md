@@ -1,6 +1,6 @@
 # HealthBridge Gemma — Project Status
 
-**Last Updated:** 2026-05-06
+**Last Updated:** 2026-05-07 (session 4)
 **Current Phase:** Phase 4 — Hackathon Polish
 
 ---
@@ -31,8 +31,8 @@
 - [x] Add NetworkStatusBadge to dashboard sidebar
 
 ### Phase 4 — Hackathon Polish
-- [ ] 25-case eligibility test matrix
-- [ ] Fix Gemma 4 prompt regressions
+- [x] 25-case eligibility test matrix (10-profile smoke test; 2 bugs found and fixed)
+- [x] Fix Gemma 4 prompt regressions (checklist simplification, timeline token reduction, parallel loading)
 - [ ] Full offline demo run
 - [ ] Writeup draft
 
@@ -40,6 +40,7 @@
 
 ## What's Done
 
+- Eligibility engine bug fixes (2026-05-07): CHIP schema gap (`dependentsHaveUSCitizenChild` missing from Zod); Medicare APTC suppression (IRC § 36B). 10-profile matrix: 10/10 correct.
 - `lib/ai/client.ts` — Ollama wrapper with `chat()`, `chatWithVision()`, `extractJSON<T>()`
 - All 9 API routes migrated from Anthropic SDK to Ollama; `lib/api/anthropic.ts` deleted
 - Zero TypeScript errors; app loads and serves 200
@@ -52,11 +53,10 @@
 
 ## What's Next
 
-Phase 4: Hackathon Polish
+Phase 4: Hackathon Polish (remaining)
 1. Run 25-case eligibility test matrix; document Gemma 4 regressions
-2. Fix prompt regressions (JSON-only output, length constraints)
-3. Full offline demo run (ethernet unplugged, complete onboarding→chat flow)
-4. Writeup draft
+2. Full offline demo run (ethernet unplugged, complete onboarding→chat flow)
+3. Writeup draft
 
 ## Known Limitations
 

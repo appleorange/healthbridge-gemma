@@ -66,13 +66,16 @@
 
 > Goal: demo-ready, no regressions, compelling narrative.
 
-- [ ] Run full 25-case eligibility test matrix, document any Gemma 4 regressions
+- [x] Run full 25-case eligibility test matrix, document any Gemma 4 regressions
   - Matrix lives in `.claude/TASKS.md` (original project)
   - Log any accuracy gaps with specific status + income + state combinations
-- [ ] Fix prompt regressions — Gemma 4 is more literal than Claude Sonnet; system prompts may need to be more explicit about:
-  - Output format (JSON only, no markdown, no explanation)
-  - Response length constraints
-  - Staying in character as HealthBridge AI
+  - 10-profile smoke test run 2026-05-07: 2 bugs found and fixed (see changelog)
+  - Fix 1: `dependentsHaveUSCitizenChild` missing from Zod schema — CHIP never fired for mixed-status families
+  - Fix 2: APTC subsidy flag incorrectly shown when Medicare is primary (IRC § 36B violation)
+- [x] Fix prompt regressions — simplified checklist prompt (4 fields, 5 items max); timeline profile serialization cut from ~1,400 to ~500 tokens; parallel dashboard loading with sessionStorage cache
+  - Checklist output is clean with simplified schema
+  - Timeline generates correct enrollment deadlines
+  - Dashboard hydrates from cache on repeat visits in <1s
 - [ ] Full offline demo run: unplug ethernet, complete onboarding → eligibility → plan recommendations → chat → appeal flow, confirm everything works end to end
 - [ ] Writeup draft — include:
   - Architecture section (Next.js + Ollama + local inference)

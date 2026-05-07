@@ -2,6 +2,51 @@
 
 ---
 
+## [2026-05-07] Phase 4 — Eligibility engine bug fixes (CHIP schema gap + Medicare APTC flag)
+
+**Fix 1 — CHIP schema gap (mixed-status families)**
+- `lib/validation/schemas.ts`: added `dependentsHaveUSCitizenChild: z.boolean().optional()` to `UserProfileSchema`
+- Root cause: field existed in `types/index.ts` and the onboarding form but was absent from the Zod schema; Zod stripped it before the engine saw it, so the CHIP eligibility branch never evaluated
+- Impact: undocumented / DACA / TPS parents with US-citizen or LPR children were returned `short_term` as primary recommendation instead of CHIP — a materially incorrect result for mixed-status families
+- Verified: Profile 4 (undocumented, TX, $18k, HH3, 2 USC children) now returns `chip` as primary with correct CHIP eligibility flags
+
+**Fix 2 — Medicare APTC flag suppression**
+- `lib/eligibility/engine.ts`: when `adjustedPrimary === 'medicare'`, APTC circumstance flag is removed from `specialCircumstances` and `subsidyEligible` is returned as `false`
+- Root cause: the APTC calculation was correct for ACA marketplace standalone but didn't account for the IRC § 36B prohibition on Premium Tax Credits for months enrolled in Medicare
+- Added TODO comment: model Medicare Savings Programs (QMB/SLMB/QI) as a future low-income supplement path for Medicare-primary users
+- Verified: Profile 9 (US citizen, 67yo, FL, $24k) now returns `subsidyEligible: false` with no APTC flag; Medicare remains primary recommendation
+
+**Full 10-profile matrix re-run: 10/10 correct after both fixes**
+
+---
+
+## [2026-05-06] Phase 4 — Checklist optimizations and parallel dashboard loading
+
+**Opt 1 — Checklist type and prompt simplification:**
+- `types/index.ts`: removed `id`, `link`, `linkLabel` from `ChecklistItem` (model reliably omits them; they added noise)
+- `app/api/checklist/route.ts`: prompt reduced to 4 required fields (category, title, detail, urgent), max 5 items; filter/map block updated to match
+- `components/checklist/ActionChecklist.tsx`: switched expand-state key from `item.id` to `item.title`; removed link/ExternalLink block and unused import
+
+**Opt 2 — Timeline profile serialization:**
+- `app/api/timeline/generate/route.ts`: extracts only the 22 profile fields relevant to enrollment-deadline generation (drops healthcare usage, prescriptions, benefit priorities, subsidy/ACA fields, etc.) — reduces ~1,200 tokens → ~300 tokens in the profile block
+- Removed `null, 2` pretty-printing from both profile and eligibility JSON; compact serialization saves ~200 additional tokens
+
+**Opt 3 — Parallel dashboard loading:**
+- `app/dashboard/page.tsx`: checklist and timeline fetches now fire simultaneously on dashboard load (not checklist-first, then timeline lazily on accordion expand)
+- SessionStorage cache added for timeline (`hb_timeline`) — subsequent dashboard visits skip both fetches
+- `components/timeline/EnrollmentTimeline.tsx`: accepts `preloadedAiEvents` and `preloadedLoading` props; skips self-fetch when parent is managing the call; retains self-fetch as standalone fallback
+
+**console.time instrumentation stripped** from all 9 API routes before ship.
+
+**Measured timings (Gemma 4 on CPU, ~0.18 tok/s):**
+- Eligibility / recommendation page: **~6.7s total** — ✅ under 8s target
+- Checklist (Ollama inference): **11.7s**
+- Timeline (Ollama inference): **22.7s**
+- Dashboard fully loaded (parallel): **~22.7s** — bottlenecked by timeline inference on this CPU
+- Dashboard with both caches warm: **<1s** (sessionStorage hydration only)
+
+---
+
 ## [2026-05-06] Bug fixes — chat abort, false offline banner, slowness
 
 **Issue 1 — Chat stream abort:**
