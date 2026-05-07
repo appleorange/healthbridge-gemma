@@ -212,13 +212,10 @@ export interface NextStep {
 }
 
 export interface ChecklistItem {
-  id: string
   category: 'document' | 'call' | 'action' | 'deadline'
   title: string
   detail: string
   urgent?: boolean
-  link?: string
-  linkLabel?: string
 }
 
 export interface FlowchartNode {

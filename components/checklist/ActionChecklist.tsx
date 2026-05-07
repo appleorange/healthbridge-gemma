@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { FileText, Phone, CheckCircle, Clock, ChevronDown, ChevronUp, ExternalLink, AlertCircle } from 'lucide-react'
+import { FileText, Phone, CheckCircle, Clock, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react'
 import type { ChecklistItem } from '@/types'
 
 interface Props {
@@ -43,7 +43,7 @@ const CATEGORY_CONFIG = {
 } as const
 
 export default function ActionChecklist({ items }: Props) {
-  const [expanded, setExpanded] = useState<string | null>(items[0]?.id ?? null)
+  const [expanded, setExpanded] = useState<string | null>(items[0]?.title ?? null)
 
   const urgentItems = items.filter(i => i.urgent)
   const normalItems = items.filter(i => !i.urgent)
@@ -54,17 +54,17 @@ export default function ActionChecklist({ items }: Props) {
       {ordered.map(item => {
         const cfg = CATEGORY_CONFIG[item.category] ?? CATEGORY_CONFIG.action
         const Icon = cfg.icon
-        const isOpen = expanded === item.id
+        const isOpen = expanded === item.title
 
         return (
           <div
-            key={item.id}
+            key={item.title}
             className={`rounded-xl border overflow-hidden transition-all ${
               item.urgent ? 'border-red-200 bg-red-50' : `${cfg.border} bg-white`
             }`}
           >
             <button
-              onClick={() => setExpanded(isOpen ? null : item.id)}
+              onClick={() => setExpanded(isOpen ? null : item.title)}
               className="w-full flex items-center gap-3 px-4 py-3 text-left"
             >
               <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
@@ -98,17 +98,6 @@ export default function ActionChecklist({ items }: Props) {
               <div className="px-4 pb-4">
                 <div className="ml-10">
                   <p className="text-sm text-gray-600 leading-relaxed">{item.detail}</p>
-                  {item.link && (
-                    <a
-                      href={item.link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={`inline-flex items-center gap-1 mt-2 text-xs font-medium ${cfg.color} hover:underline`}
-                    >
-                      {item.linkLabel ?? 'Open link'}
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
-                  )}
                 </div>
               </div>
             )}

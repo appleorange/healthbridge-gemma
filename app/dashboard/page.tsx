@@ -15,7 +15,7 @@ import LanguageToggle from '@/components/ui/LanguageToggle'
 import { useLanguage } from '@/hooks/useLanguage'
 import { ES_DASHBOARD } from '@/lib/i18n/es'
 import { PLAN_INFO } from '@/lib/dashboard/plan-info'
-import type { UserProfile, EligibilityResult, PlanType, ParsedDocument, ChecklistItem } from '@/types'
+import type { UserProfile, EligibilityResult, PlanType, ParsedDocument, ChecklistItem, TimelineEvent } from '@/types'
 
 export default function DashboardHomePage() {
   const router = useRouter()
@@ -29,6 +29,8 @@ export default function DashboardHomePage() {
   const [documents, setDocuments] = useState<ParsedDocument[]>([])
   const [checklist, setChecklist] = useState<ChecklistItem[] | null>(null)
   const [checklistLoading, setChecklistLoading] = useState(false)
+  const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[] | null>(null)
+  const [timelineLoading, setTimelineLoading] = useState(false)
 
   useEffect(() => {
     let parsedProfile: UserProfile
@@ -44,25 +46,51 @@ export default function DashboardHomePage() {
       try { setDocuments(JSON.parse(sessionStorage.getItem('hb_documents') ?? '[]')) } catch {}
     } catch { router.push('/onboarding'); return }
 
-    const cached = sessionStorage.getItem('hb_checklist')
-    if (cached) {
-      try { setChecklist(JSON.parse(cached)); return } catch {}
-    }
-    setChecklistLoading(true)
-    fetch('/api/checklist', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ profile: parsedProfile, eligibility: parsedEligibility, language: sessionStorage.getItem('hb_lang') ?? 'en' }),
-    })
-      .then(r => r.json())
-      .then(data => {
-        if (Array.isArray(data.items)) {
-          setChecklist(data.items)
-          sessionStorage.setItem('hb_checklist', JSON.stringify(data.items))
-        }
+    const lang = sessionStorage.getItem('hb_lang') ?? 'en'
+
+    // Hydrate caches synchronously before firing any fetch
+    const cachedChecklist = sessionStorage.getItem('hb_checklist')
+    if (cachedChecklist) { try { setChecklist(JSON.parse(cachedChecklist)) } catch {} }
+
+    const cachedTimeline = sessionStorage.getItem('hb_timeline')
+    if (cachedTimeline) { try { setTimelineEvents(JSON.parse(cachedTimeline)) } catch {} }
+
+    // Fire uncached calls in parallel — neither depends on the other
+    if (!cachedChecklist) {
+      setChecklistLoading(true)
+      fetch('/api/checklist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ profile: parsedProfile, eligibility: parsedEligibility, language: lang }),
       })
-      .catch(() => {})
-      .finally(() => setChecklistLoading(false))
+        .then(r => r.json())
+        .then(data => {
+          if (Array.isArray(data.items)) {
+            setChecklist(data.items)
+            sessionStorage.setItem('hb_checklist', JSON.stringify(data.items))
+          }
+        })
+        .catch(() => {})
+        .finally(() => setChecklistLoading(false))
+    }
+
+    if (!cachedTimeline) {
+      setTimelineLoading(true)
+      fetch('/api/timeline/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ profile: parsedProfile, eligibilityResult: parsedEligibility }),
+      })
+        .then(r => r.json())
+        .then(({ events }) => {
+          if (Array.isArray(events) && events.length > 0) {
+            setTimelineEvents(events)
+            sessionStorage.setItem('hb_timeline', JSON.stringify(events))
+          }
+        })
+        .catch(() => {})
+        .finally(() => setTimelineLoading(false))
+    }
   }, [router])
 
   if (!profile || !eligibility) {
@@ -127,9 +155,12 @@ export default function DashboardHomePage() {
           <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">{t?.yourChecklist ?? 'Your action checklist'}</h3>
         </div>
         {checklistLoading && (
-          <div className="flex items-center gap-2 p-4 bg-white border border-gray-100 rounded-xl text-sm text-gray-400">
-            <div className="w-4 h-4 border-2 border-brand-400 border-t-transparent rounded-full animate-spin shrink-0" />
-            {t?.generatingChecklist ?? 'Generating your personalized checklist…'}
+          <div className="flex items-center gap-3 p-4 bg-brand-50 border border-brand-100 rounded-xl">
+            <div className="w-4 h-4 border-2 border-brand-300 border-t-brand-600 rounded-full animate-spin shrink-0" />
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-brand-900">{t?.generatingChecklist ?? 'Gemma 4 is generating your checklist locally…'}</p>
+              <p className="text-xs text-brand-600 mt-0.5 flex items-center gap-1"><Sparkles className="w-3 h-3" /> Running on your device — no data sent to the cloud</p>
+            </div>
           </div>
         )}
         {checklist && checklist.length > 0 && <ActionChecklist items={checklist} />}
@@ -315,16 +346,30 @@ export default function DashboardHomePage() {
           <div className="flex items-center gap-2">
             <Calendar className="w-4 h-4 text-gray-400" />
             <span className="text-sm font-semibold text-gray-700">{t?.enrollmentCalendar ?? 'Enrollment calendar'}</span>
-            <span className="text-xs text-gray-400">{t?.keyDates ?? 'Key dates and deadlines'}</span>
+            {timelineLoading
+              ? <span className="flex items-center gap-1 text-xs text-brand-500"><Sparkles className="w-3 h-3 animate-pulse" />Personalizing…</span>
+              : <span className="text-xs text-gray-400">{t?.keyDates ?? 'Key dates and deadlines'}</span>
+            }
           </div>
           {showTimeline ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
         </button>
+        {timelineLoading && !showTimeline && (
+          <div className="flex items-center gap-3 mt-2 px-4 py-3 bg-brand-50 border border-brand-100 rounded-xl">
+            <div className="w-4 h-4 border-2 border-brand-300 border-t-brand-600 rounded-full animate-spin shrink-0" />
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-brand-900">Gemma 4 is generating your timeline locally…</p>
+              <p className="text-xs text-brand-600 mt-0.5 flex items-center gap-1"><Sparkles className="w-3 h-3" /> Running on your device — no data sent to the cloud</p>
+            </div>
+          </div>
+        )}
         {showTimeline && (
           <div className="mt-2 p-4 bg-white border border-gray-100 rounded-xl">
             <EnrollmentTimeline
               profile={profile}
               eligibilityResult={eligibility}
               docDeadlines={docDeadlines}
+              preloadedAiEvents={timelineEvents}
+              preloadedLoading={timelineLoading}
             />
           </div>
         )}

@@ -13,13 +13,38 @@ export async function POST(req: Request) {
     }
     const { profile, eligibilityResult } = parsed.data
 
-    const prompt = `Based on this user profile and eligibility result, generate 3-5 specific enrollment deadlines and action items as a JSON array. Each item needs: id, title, description, date (ISO string), type (one of: open_enrollment, sep, cobra, university, medicaid, action), status (one of: active, upcoming, ongoing, action_required, past), urgent (boolean). Make dates specific — if they go to Carnegie Mellon, the fall waiver deadline is typically August 31. If they work at Google, open enrollment is in November. Be specific about what action to take and why based on their recommended plan. Return only valid JSON, no other text.
+    // Only send fields the model needs for enrollment-deadline generation
+    const timelineProfile = {
+      immigrationStatus: profile.immigrationStatus,
+      employmentStatus: profile.employmentStatus,
+      state: profile.state,
+      age: profile.age,
+      isStudent: profile.isStudent,
+      university: profile.university,
+      yearsLeftInCollege: profile.yearsLeftInCollege,
+      schoolRequiresInsurance: profile.schoolRequiresInsurance,
+      employerName: profile.employerName,
+      hasEmployerInsurance: profile.hasEmployerInsurance,
+      employerOpenEnrollmentMonth: profile.employerOpenEnrollmentMonth,
+      onCOBRA: profile.onCOBRA,
+      cobraMonthsRemaining: profile.cobraMonthsRemaining,
+      currentlyInsured: profile.currentlyInsured,
+      currentPlanType: profile.currentPlanType,
+      hasDependents: profile.hasDependents,
+      dependentCoverageEndDate: profile.dependentCoverageEndDate,
+      agingOffDate: profile.agingOffDate,
+      jobSearchTimeline: profile.jobSearchTimeline,
+      formerEmployerInsurance: profile.formerEmployerInsurance,
+      unemployedMonths: profile.unemployedMonths,
+    }
+
+    const prompt = `Based on this user profile and eligibility result, generate up to 6 enrollment deadlines as a JSON array. Each item has exactly 3 fields: date (ISO string YYYY-MM-DD), title (short action title, under 10 words), urgent (true or false). Make dates specific — if they attend Carnegie Mellon, the fall SHIP waiver deadline is August 31; if they work at Google, open enrollment is in November. Return only valid JSON, no other text.
 
 User profile:
-${JSON.stringify(profile, null, 2)}
+${JSON.stringify(timelineProfile)}
 
 Eligibility result:
-${JSON.stringify({ primaryRecommendation: eligibilityResult.primaryRecommendation, eligiblePlans: eligibilityResult.eligiblePlans, specialCircumstances: eligibilityResult.specialCircumstances }, null, 2)}`
+${JSON.stringify({ primaryRecommendation: eligibilityResult.primaryRecommendation, eligiblePlans: eligibilityResult.eligiblePlans, specialCircumstances: eligibilityResult.specialCircumstances })}`
 
     const text = await chat(
       [{ role: 'user', content: prompt }],
@@ -27,22 +52,22 @@ ${JSON.stringify({ primaryRecommendation: eligibilityResult.primaryRecommendatio
       false
     )
 
-    const rawEvents = extractJSON<Partial<TimelineEvent>[]>(text, [])
+    type MinimalEvent = { date?: string; title?: string; urgent?: boolean }
+    const rawEvents = extractJSON<MinimalEvent[]>(text, [])
 
-    // Validate and tag each event as AI-sourced
     const events: TimelineEvent[] = rawEvents
-      .filter(e => e.id && e.title && e.description && e.date && e.type && e.status)
-      .map(e => ({
-        id: `ai_${e.id}`,
-        title: e.title!,
-        description: e.description!,
-        date: e.date!,
-        endDate: e.endDate,
-        type: e.type!,
-        status: e.status!,
+      .filter((e): e is { date: string; title: string; urgent?: boolean } =>
+        typeof e.date === 'string' && typeof e.title === 'string'
+      )
+      .slice(0, 6)
+      .map((e, i) => ({
+        id: `ai_${i + 1}`,
+        title: e.title,
+        description: e.title,
+        date: e.date,
+        type: 'action' as const,
+        status: (e.urgent ? 'action_required' : 'upcoming') as TimelineEvent['status'],
         urgent: e.urgent ?? false,
-        actionLabel: e.actionLabel,
-        actionUrl: e.actionUrl,
         aiSource: true,
       }))
 

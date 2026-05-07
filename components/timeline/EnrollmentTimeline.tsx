@@ -413,13 +413,26 @@ interface Props {
   profile: UserProfile
   eligibilityResult: EligibilityResult
   docDeadlines?: DocDeadline[]
+  preloadedAiEvents?: TimelineEvent[] | null  // null = parent still fetching
+  preloadedLoading?: boolean
 }
 
-export default function EnrollmentTimeline({ profile, eligibilityResult, docDeadlines }: Props) {
+export default function EnrollmentTimeline({ profile, eligibilityResult, docDeadlines, preloadedAiEvents, preloadedLoading }: Props) {
   const [events, setEvents] = useState<TimelineEvent[]>(() => generateEvents(profile, eligibilityResult))
-  const [aiLoading, setAiLoading] = useState(true)
+  // If parent is managing the fetch, mirror its loading state; otherwise start loading ourselves
+  const [aiLoading, setAiLoading] = useState(preloadedAiEvents === undefined)
 
   useEffect(() => {
+    // Parent prefetched — use its result and skip our own fetch
+    if (preloadedAiEvents !== undefined) {
+      if (Array.isArray(preloadedAiEvents) && preloadedAiEvents.length > 0) {
+        setEvents(prev => mergeEvents(prev, preloadedAiEvents))
+      }
+      setAiLoading(preloadedLoading ?? false)
+      return
+    }
+
+    // Fallback: fetch ourselves (component used standalone)
     let cancelled = false
     setAiLoading(true)
 
@@ -434,11 +447,11 @@ export default function EnrollmentTimeline({ profile, eligibilityResult, docDead
           setEvents(prev => mergeEvents(prev, aiEvents))
         }
       })
-      .catch(() => {/* silently ignore — static events still show */})
+      .catch(() => {})
       .finally(() => { if (!cancelled) setAiLoading(false) })
 
     return () => { cancelled = true }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [preloadedAiEvents, preloadedLoading]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Merge document deadlines into the timeline whenever they change
   useEffect(() => {

@@ -52,27 +52,17 @@ Subsidy eligible: ${eligibility.subsidyEligible ?? false}
 Special circumstances: ${(eligibility.specialCircumstances ?? []).join('; ') || 'none'}
 </eligibility_result>
 
-Generate a concrete, personalized action checklist for this specific user to enroll in ${primaryLabel}.
+Generate a personalized action checklist for this user to enroll in ${primaryLabel}.
 
-Return a JSON array of checklist items. Each item must have:
-- id: unique string (e.g. "doc_1", "call_1")
-- category: one of "document", "call", "action", "deadline"
-- title: short action title (under 10 words)
-- detail: 1-2 sentences of specific, actionable guidance. Include real phone numbers, URLs, or specific document names where relevant.
-- urgent: true if this is time-sensitive or blocking
-- link: URL (optional, only if a specific government or official site is directly relevant)
-- linkLabel: short label for the link (optional)
+Return a JSON array of exactly 5 items or fewer. Each item has exactly these 4 fields:
+- category: "document", "call", "action", or "deadline"
+- title: under 8 words
+- detail: 1-2 sentences of specific, actionable guidance
+- urgent: true or false
 
-Rules:
-- "document" items = specific documents they need to gather (name the actual document, e.g. "Form I-94", "W-2", "SSN card")
-- "call" items = specific offices/numbers to contact (give the actual number or URL, not just "call your state")
-- "action" items = concrete steps to take (apply online, complete a form, etc.)
-- "deadline" items = time-sensitive windows they must act within
-- Be specific to their immigration status, state, and plan type — generic advice is useless
-- Maximum 8 items total. Prioritize by urgency. Lead with the highest-impact items.
-- Do not include items that don't apply (e.g. no COBRA deadline if they're not losing coverage)
+Rules: be specific to their immigration status, state, and plan type. Lead with the highest-impact items. No generic advice.
 
-Return only valid JSON — no markdown fences, no explanation.${language === 'es' ? '\n\nWrite all title and detail fields in Spanish.' : ''}`
+Return only valid JSON — no markdown, no explanation.${language === 'es' ? '\n\nWrite all title and detail fields in Spanish.' : ''}`
 
     const text = await chat(
       [{ role: 'user', content: prompt }],
@@ -86,15 +76,12 @@ Return only valid JSON — no markdown fences, no explanation.${language === 'es
     const VALID_CATEGORIES = new Set(['document', 'call', 'action', 'deadline'])
     const safeItems: ChecklistItem[] = (items as unknown[])
       .filter((item): item is Record<string, unknown> => item !== null && typeof item === 'object')
-      .filter(item => typeof item.id === 'string' && typeof item.title === 'string' && typeof item.detail === 'string' && VALID_CATEGORIES.has(item.category as string))
+      .filter(item => typeof item.title === 'string' && typeof item.detail === 'string' && VALID_CATEGORIES.has(item.category as string))
       .map(item => ({
-        id: item.id as string,
         category: item.category as ChecklistItem['category'],
         title: item.title as string,
         detail: item.detail as string,
         urgent: item.urgent === true,
-        link: typeof item.link === 'string' ? item.link : undefined,
-        linkLabel: typeof item.linkLabel === 'string' ? item.linkLabel : undefined,
       }))
 
     return Response.json({ items: safeItems })
