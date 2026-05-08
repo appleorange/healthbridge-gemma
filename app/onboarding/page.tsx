@@ -1,8 +1,9 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Shield, ChevronRight, ChevronLeft } from 'lucide-react'
+import { Shield, ChevronRight, ChevronLeft, Sparkles } from 'lucide-react'
 import { motion } from 'framer-motion'
+import type { EligibilityResult } from '@/types'
 import { US_STATES, getVisibleSteps, getLocalizedSteps } from '@/lib/eligibility/onboarding-steps'
 import type { UserProfile } from '@/types'
 import StepTransition from '@/components/ui/StepTransition'
@@ -10,6 +11,14 @@ import { AnimatedField } from '@/components/onboarding/AnimatedField'
 import LanguageToggle from '@/components/ui/LanguageToggle'
 import { useLanguage } from '@/hooks/useLanguage'
 import { ES_UI } from '@/lib/i18n/es'
+
+const THINKING_STEPS = [
+  { step: 1, label: 'Checking marketplace eligibility' },
+  { step: 2, label: 'Evaluating Medicaid & CHIP' },
+  { step: 3, label: 'Applying immigration waiting period rules' },
+  { step: 4, label: 'Calculating subsidy eligibility' },
+  { step: 5, label: 'Generating your recommendation' },
+] as const
 
 export default function OnboardingPage() {
   const router = useRouter()
@@ -25,6 +34,7 @@ export default function OnboardingPage() {
     hasDependents: false,
   })
   const [loading, setLoading] = useState(false)
+  const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set())
   const [direction, setDirection] = useState<'forward' | 'backward'>('forward')
 
   const localizedSteps = getLocalizedSteps(lang)
@@ -73,19 +83,43 @@ export default function OnboardingPage() {
     setDirection('forward')
     if (isLast) {
       setLoading(true)
+      setCompletedSteps(new Set())
       try {
-        const res = await fetch('/api/eligibility', {
+        const res = await fetch('/api/eligibility/thinking', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ profile, language: lang }),
-          signal: AbortSignal.timeout(15000),
+          signal: AbortSignal.timeout(200000),
         })
-        const result = await res.json()
-        sessionStorage.setItem('hb_profile', JSON.stringify(profile))
-        sessionStorage.setItem('hb_eligibility', JSON.stringify(result))
-        // Clear old chat history when starting fresh
-        sessionStorage.removeItem('hb_chat_messages')
-        router.push('/dashboard')
+        if (!res.body) throw new Error('No response body')
+        const reader = res.body.getReader()
+        const decoder = new TextDecoder()
+        let buf = ''
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          buf += decoder.decode(value, { stream: true })
+          const lines = buf.split('\n')
+          buf = lines.pop() ?? ''
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue
+            try {
+              const msg = JSON.parse(line.slice(6)) as {
+                type: string
+                step?: number
+                eligibility?: EligibilityResult
+              }
+              if (msg.type === 'step' && typeof msg.step === 'number') {
+                setCompletedSteps(prev => { const next = new Set(prev); next.add(msg.step!); return next })
+              } else if (msg.type === 'result' && msg.eligibility) {
+                sessionStorage.setItem('hb_profile', JSON.stringify(profile))
+                sessionStorage.setItem('hb_eligibility', JSON.stringify(msg.eligibility))
+                sessionStorage.removeItem('hb_chat_messages')
+                router.push('/dashboard')
+              }
+            } catch { /* malformed SSE chunk — skip */ }
+          }
+        }
       } catch (e) {
         console.error(e)
         setLoading(false)
@@ -171,7 +205,55 @@ export default function OnboardingPage() {
           <h1 className="text-2xl font-bold text-gray-900 mb-2">{step.title}</h1>
           <p className="text-gray-500 mb-8">{step.subtitle}</p>
 
-          {/* Fields */}
+          {/* Fields or thinking panel */}
+          {isLast && loading ? (
+            <div className="py-4">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-8 h-8 bg-brand-50 rounded-full flex items-center justify-center">
+                  <Sparkles className="w-4 h-4 text-brand-600" />
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-900 text-sm">
+                    {lang === 'es' ? 'Analizando tu perfil...' : 'Analyzing your profile'}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    {lang === 'es' ? 'La IA está razonando sobre tu elegibilidad...' : 'AI is reasoning through your eligibility...'}
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-4">
+                {THINKING_STEPS.map(({ step, label }) => {
+                  const done = completedSteps.has(step)
+                  return (
+                    <div key={step} className="flex items-center gap-3">
+                      <motion.div
+                        animate={done
+                          ? { backgroundColor: '#588157' }
+                          : { backgroundColor: '#f3f4f6' }}
+                        transition={{ duration: 0.3 }}
+                        className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0"
+                      >
+                        {done ? (
+                          <motion.svg
+                            initial={{ scale: 0 }}
+                            animate={{ scale: 1 }}
+                            width="12" height="12" viewBox="0 0 12 12" fill="none"
+                          >
+                            <path d="M2 6l3 3 5-5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                          </motion.svg>
+                        ) : (
+                          <div className="w-2 h-2 rounded-full bg-gray-300" />
+                        )}
+                      </motion.div>
+                      <span className={`text-sm transition-colors duration-300 ${done ? 'text-gray-900 font-medium' : 'text-gray-400'}`}>
+                        {label}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ) : (
           <div className="space-y-6">
             {deduplicatedFields.map((field, index) => (
               <AnimatedField key={field.id + (field.showWhen ? JSON.stringify(field.showWhen) : '')} index={index}>
@@ -287,10 +369,12 @@ export default function OnboardingPage() {
               </AnimatedField>
             ))}
           </div>
+          )}
 
           </StepTransition>
 
-          {/* Navigation */}
+          {/* Navigation — hidden when thinking panel is active */}
+          {!(isLast && loading) && (
           <div className="flex gap-3 mt-10">
             <button onClick={handleBack} className="btn-secondary flex items-center gap-2">
               <ChevronLeft className="w-4 h-4" /> {lang === 'es' ? ES_UI.back : 'Back'}
@@ -300,15 +384,14 @@ export default function OnboardingPage() {
               disabled={loading}
               className="btn-primary flex-1 flex items-center justify-center gap-2"
             >
-              {loading ? (
-                <span>{lang === 'es' ? ES_UI.analyzing : 'Analyzing your profile...'}</span>
-              ) : isLast ? (
+              {isLast ? (
                 <>{lang === 'es' ? ES_UI.seeMyOptions : 'See my options'} <ChevronRight className="w-4 h-4" /></>
               ) : (
                 <>{lang === 'es' ? ES_UI.continue : 'Continue'} <ChevronRight className="w-4 h-4" /></>
               )}
             </button>
           </div>
+          )}
         </div>
       </div>
     </div>

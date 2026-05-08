@@ -2,6 +2,15 @@
 
 ---
 
+## [2026-05-07] Phase 4 — Thinking SSE route + onboarding step-progress UI
+
+- Created `app/api/eligibility/thinking/route.ts` — POST SSE endpoint that streams `{type:"step",step:N}` events as Gemma 4 thinks through eligibility categories, then a final `{type:"result",eligibility:{...}}` event; calls `chatWithThinking()` from `lib/ai/client.ts` with `think:true`
+- Updated `app/onboarding/page.tsx` — last-step submission now calls `/api/eligibility/thinking` and reads the SSE stream; replaced "Analyzing your profile..." loading spinner with an animated 5-step progress panel; steps mark green as their keyword fires in the thinking stream (order-independent); steps that never fire remain gray (correct for visa types like H-1B where the 5-year bar step doesn't apply)
+- Updated `lib/ai/client.ts` default `THINKING_TIMEOUT_MS` from 60s to 180s; added `OLLAMA_THINKING_TIMEOUT_MS=180000` to `.env`
+- Build passes zero TypeScript errors; `/api/eligibility` route unchanged
+
+---
+
 ## [2026-05-07] Phase 4 — Eligibility engine bug fixes (CHIP schema gap + Medicare APTC flag)
 
 **Fix 1 — CHIP schema gap (mixed-status families)**

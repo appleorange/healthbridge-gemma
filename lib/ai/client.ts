@@ -3,6 +3,8 @@ const MODEL = process.env.OLLAMA_MODEL ?? 'gemma4:e4b'
 const TIMEOUT_MS = parseInt(process.env.OLLAMA_TIMEOUT_MS ?? '120000', 10)
 // Streaming responses can take several minutes at low tok/s — use a separate, much longer timeout.
 const STREAM_TIMEOUT_MS = parseInt(process.env.OLLAMA_STREAM_TIMEOUT_MS ?? '300000', 10)
+// Thinking mode streams thinking tokens then content tokens — needs a long timeout covering both phases.
+const THINKING_TIMEOUT_MS = parseInt(process.env.OLLAMA_THINKING_TIMEOUT_MS ?? '180000', 10)
 
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant'
@@ -102,6 +104,101 @@ export async function chatWithVision(
 
   const data = (await res.json()) as OllamaNonStreamResponse
   return data.message.content
+}
+
+// Thinking-step keyword definitions — ordered so earlier steps don't accidentally satisfy later ones.
+// Each set of keywords maps to the step number fired when ANY keyword is matched in the accumulated
+// thinking text. Steps fire at most once each, in order, via the firedSteps guard.
+const THINKING_STEP_KEYWORDS: { step: number; keywords: string[] }[] = [
+  { step: 1, keywords: ['marketplace', 'immigration status'] },
+  { step: 2, keywords: ['medicaid', 'Medicaid'] },
+  { step: 3, keywords: ['5-year', 'five-year', 'bar'] },
+  { step: 4, keywords: ['subsidy', 'APTC', 'FPL'] },
+]
+
+interface OllamaStreamChunk {
+  message: { role: string; thinking?: string; content: string }
+  done: boolean
+}
+
+export async function chatWithThinking(
+  messages: ChatMessage[],
+  system: string,
+  onThinkingStep?: (step: number) => void,
+): Promise<string> {
+  const res = await fetch(`${BASE_URL}/api/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: MODEL,
+      messages: buildMessages(messages, system),
+      stream: true,
+      think: true,
+    }),
+    signal: AbortSignal.timeout(THINKING_TIMEOUT_MS),
+  })
+
+  if (!res.ok) {
+    throw new Error(`Ollama /api/chat (thinking) ${res.status}: ${await res.text()}`)
+  }
+  if (!res.body) throw new Error('Ollama returned no body for thinking request')
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buf = ''
+  let thinkingAccum = ''
+  let contentAccum = ''
+  let contentStarted = false
+  const firedSteps = new Set<number>()
+
+  function checkSteps(newThinking: string) {
+    if (!onThinkingStep) return
+    const combined = thinkingAccum + newThinking
+    for (const { step, keywords } of THINKING_STEP_KEYWORDS) {
+      if (!firedSteps.has(step) && keywords.some(kw => combined.includes(kw))) {
+        firedSteps.add(step)
+        onThinkingStep(step)
+      }
+    }
+  }
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buf += decoder.decode(value, { stream: true })
+    const lines = buf.split('\n')
+    buf = lines.pop() ?? ''
+
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed) continue
+      try {
+        const chunk = JSON.parse(trimmed) as OllamaStreamChunk
+        const thinking = chunk.message.thinking ?? ''
+        const content = chunk.message.content ?? ''
+
+        if (thinking) {
+          checkSteps(thinking)
+          thinkingAccum += thinking
+        }
+
+        if (content && !contentStarted) {
+          contentStarted = true
+          // Step 5 fires as soon as the first content token arrives — thinking is complete
+          if (!firedSteps.has(5) && onThinkingStep) {
+            firedSteps.add(5)
+            onThinkingStep(5)
+          }
+        }
+        if (content) contentAccum += content
+      } catch {
+        // malformed chunk — skip
+      }
+    }
+  }
+
+  return contentAccum
 }
 
 export function extractJSON<T>(text: string, fallback: T): T {
