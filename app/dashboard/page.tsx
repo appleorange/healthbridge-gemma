@@ -11,6 +11,7 @@ import EligibilityFlowchart from '@/components/flowchart/EligibilityFlowchart'
 import EnrollmentTimeline from '@/components/timeline/EnrollmentTimeline'
 import ActionChecklist from '@/components/checklist/ActionChecklist'
 import TrustBanner from '@/components/ui/TrustBanner'
+import EligibilityThinkingBanner from '@/components/ui/EligibilityThinkingBanner'
 import LanguageToggle from '@/components/ui/LanguageToggle'
 import { useLanguage } from '@/hooks/useLanguage'
 import { ES_DASHBOARD } from '@/lib/i18n/es'
@@ -147,6 +148,8 @@ export default function DashboardHomePage() {
         verifyUrl="https://www.healthcare.gov"
         verifyLabel={t?.verifyLabel ?? 'Verify on healthcare.gov →'}
       />
+
+      <EligibilityThinkingBanner />
 
       {/* Action checklist */}
       <section>

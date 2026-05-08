@@ -95,6 +95,8 @@ export default function OnboardingPage() {
         const reader = res.body.getReader()
         const decoder = new TextDecoder()
         let buf = ''
+        // local accumulator avoids stale-closure issue when reading completedSteps at result time
+        const localSteps = new Set<number>()
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
@@ -110,10 +112,12 @@ export default function OnboardingPage() {
                 eligibility?: EligibilityResult
               }
               if (msg.type === 'step' && typeof msg.step === 'number') {
+                localSteps.add(msg.step)
                 setCompletedSteps(prev => { const next = new Set(prev); next.add(msg.step!); return next })
               } else if (msg.type === 'result' && msg.eligibility) {
                 sessionStorage.setItem('hb_profile', JSON.stringify(profile))
                 sessionStorage.setItem('hb_eligibility', JSON.stringify(msg.eligibility))
+                sessionStorage.setItem('hb_thinking_steps', JSON.stringify([...localSteps]))
                 sessionStorage.removeItem('hb_chat_messages')
                 router.push('/dashboard')
               }

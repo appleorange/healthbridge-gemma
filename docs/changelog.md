@@ -2,6 +2,13 @@
 
 ---
 
+## [2026-05-07] Phase 4 — EligibilityThinkingBanner + sessionStorage step persistence
+
+- Created `components/ui/EligibilityThinkingBanner.tsx` — reads `hb_thinking_steps` from sessionStorage; shows which of the 5 reasoning steps Gemma 4 verified (green checkmark + regulatory citation), leaving un-fired steps gray (correct for H-1B: step 3 / 5-year bar stays gray)
+- Dashboard `page.tsx` imports and renders the banner between TrustBanner and the checklist
+- Onboarding `page.tsx` saves `hb_thinking_steps` JSON to sessionStorage at result-event time using a local accumulator (avoids stale React closure)
+- E2E verified: H-1B @ Google, CA, $180k, HH=2 — steps 1, 2, 4, 5 green; step 3 gray; correct employer-sponsored recommendation; sub-15s end-to-end; zero console errors
+
 ## [2026-05-07] Phase 4 — Thinking SSE route + onboarding step-progress UI
 
 - Created `app/api/eligibility/thinking/route.ts` — POST SSE endpoint that streams `{type:"step",step:N}` events as Gemma 4 thinks through eligibility categories, then a final `{type:"result",eligibility:{...}}` event; calls `chatWithThinking()` from `lib/ai/client.ts` with `think:true`
