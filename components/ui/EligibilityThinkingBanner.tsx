@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { CheckCircle, Circle, Brain, RefreshCw } from 'lucide-react'
+import { CheckCircle, Circle, Minus, Brain, RefreshCw } from 'lucide-react'
 import type { UserProfile, EligibilityResult } from '@/types'
 
 const STEP_META: Record<number, { label: string; citation: string; cite_short: string }> = {
@@ -220,16 +220,18 @@ export default function EligibilityThinkingBanner() {
               {fired ? (
                 <CheckCircle className="w-4 h-4 text-brand-500 mt-0.5 shrink-0" />
               ) : (
-                <Circle className="w-4 h-4 text-gray-200 mt-0.5 shrink-0" />
+                <Minus className="w-4 h-4 text-gray-300 mt-0.5 shrink-0" />
               )}
               <div className="min-w-0">
-                <span className={`text-sm ${fired ? 'text-gray-800' : 'text-gray-300'}`}>
+                <span className={`text-sm ${fired ? 'text-gray-800' : 'text-gray-400'}`}>
                   {meta.label}
                 </span>
-                {fired && (
+                {fired ? (
                   <p className="text-xs text-gray-400 mt-0.5 truncate" title={meta.citation}>
                     {meta.cite_short}
                   </p>
+                ) : (
+                  <p className="text-xs text-gray-300 mt-0.5">not applicable for your profile</p>
                 )}
               </div>
             </div>

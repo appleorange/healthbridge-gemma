@@ -2,7 +2,7 @@
 
 ## System Overview
 
-HealthBridge is a Next.js 14 app that runs entirely on the user's local machine. All AI inference is handled by a local Ollama instance running `gemma4:26b` — no data is sent to any external AI API. Healthcare.gov CMS API is used for real plan data with a local JSON cache as offline fallback. The eligibility engine is pure TypeScript with no AI dependency.
+HealthBridge is a Next.js 14 app that runs entirely on the user's local machine. All AI inference is handled by a local Ollama instance running `gemma4:e4b` — no data is sent to any external AI API. Healthcare.gov CMS API is used for real plan data with a local JSON cache as offline fallback. The eligibility engine is pure TypeScript with no AI dependency.
 
 All AI-powered features (chat, document parsing, appeal drafting, network checking, timeline generation, checklist generation) route through a single centralized client in `lib/ai/client.ts`. Route files never call Ollama directly.
 
@@ -15,7 +15,7 @@ User input (browser)
   → Zod schema validation (lib/validation/schemas.ts)
   → Next.js API route (app/api/*/route.ts)
   → lib/ai/client.ts
-  → POST http://localhost:11434/api/chat (Ollama, gemma4:26b)
+  → POST http://localhost:11434/api/chat (Ollama, gemma4:e4b)
   → structured JSON or streamed text response
   → UI component
 ```
@@ -168,6 +168,6 @@ ZIP code + UserProfile
 | Variable | Scope | Purpose |
 |----------|-------|---------|
 | `OLLAMA_BASE_URL` | Server-side only | Ollama API base URL (default: `http://localhost:11434`) |
-| `OLLAMA_MODEL` | Server-side only | Ollama model identifier (default: `gemma4:26b`) |
+| `OLLAMA_MODEL` | Server-side only | Ollama model identifier (default: `gemma4:e4b`) |
 | `HEALTHCARE_GOV_API_KEY` | Server-side only | CMS Healthcare.gov Marketplace API key |
 | `NEXT_PUBLIC_APP_URL` | Client + server | Public app base URL |

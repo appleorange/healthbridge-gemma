@@ -4,12 +4,27 @@ import { Send, Bot, User, Trash2 } from 'lucide-react'
 import type { UserProfile, ChatMessage } from '@/types'
 import Typewriter from '@/components/ui/Typewriter'
 import TrustBanner from '@/components/ui/TrustBanner'
+import Markdown from 'react-markdown'
+import type { Components } from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 interface Props {
   userProfile: UserProfile
   initialContext?: string
   autoSendPrompt?: string
   onAutoPromptSent?: () => void
+}
+
+const mdComponents: Components = {
+  p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+  ul: ({ children }) => <ul className="list-disc pl-4 mb-2 space-y-0.5">{children}</ul>,
+  ol: ({ children }) => <ol className="list-decimal pl-4 mb-2 space-y-0.5">{children}</ol>,
+  li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+  h1: ({ children }) => <h1 className="text-base font-semibold mb-1.5 mt-2 first:mt-0">{children}</h1>,
+  h2: ({ children }) => <h2 className="text-sm font-semibold mb-1 mt-2 first:mt-0">{children}</h2>,
+  h3: ({ children }) => <h3 className="text-sm font-medium mb-1 mt-1.5 first:mt-0">{children}</h3>,
+  strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+  code: ({ children }) => <code className="bg-gray-100 text-gray-700 px-1 py-0.5 rounded text-xs font-mono">{children}</code>,
 }
 
 const SUGGESTED_QUESTIONS = [
@@ -209,7 +224,11 @@ export default function ChatInterface({ userProfile, autoSendPrompt, onAutoPromp
             }`}>
               {msg.id === '0' && msg.role === 'assistant' ? (
                 <Typewriter text={msg.content} speed={14} delay={400} className="text-sm leading-relaxed text-gray-700" />
-              ) : msg.content ? (
+              ) : msg.role === 'assistant' && msg.content ? (
+                <Markdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+                  {msg.content}
+                </Markdown>
+              ) : msg.role === 'user' && msg.content ? (
                 msg.content
               ) : (
                 <span className="flex gap-1 items-center text-gray-400">

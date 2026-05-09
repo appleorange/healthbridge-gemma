@@ -60,7 +60,7 @@ A user with H-1B, F-1, DACA, TPS, or undocumented status can complete the full o
 |-------|-----------|
 | Framework | Next.js 14, App Router, TypeScript (strict) |
 | Styling | Tailwind CSS v4, Framer Motion, GSAP |
-| AI inference | Ollama, `gemma4:26b`, `localhost:11434` |
+| AI inference | Ollama, `gemma4:e4b`, `localhost:11434` |
 | External data | Healthcare.gov CMS API (with offline JSON cache fallback) |
 | Input validation | Zod on all API route inputs (`lib/validation/schemas.ts`) |
 | State | React hooks + sessionStorage (`hb_*` keys) — no database, no Redux |
@@ -84,7 +84,7 @@ A user with H-1B, F-1, DACA, TPS, or undocumented status can complete the full o
 | Parameter | Value |
 |-----------|-------|
 | Ollama base URL | `http://localhost:11434` (from `OLLAMA_BASE_URL`) |
-| Model | `gemma4:26b` (from `OLLAMA_MODEL`) |
+| Model | `gemma4:e4b` (from `OLLAMA_MODEL`) |
 | Request timeout | 30000ms |
 | Streaming | `true` for `/api/chat`, `/api/appeal/draft` |
 | JSON mode | `true` for `/api/appeal/analyze`, `/api/documents/parse`, `/api/timeline/generate`, `/api/network-check`, `/api/checklist` |

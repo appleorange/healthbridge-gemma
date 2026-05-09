@@ -2,6 +2,12 @@
 
 ---
 
+## [2026-05-08] UI fixes — banner "not applicable" state + chat markdown rendering
+
+- **Fix 1 — EligibilityThinkingBanner done state**: unfired steps now show a `Minus` icon (lucide-react) + muted label + "not applicable for your profile" sub-label instead of an empty gray circle. Fired steps retain green `CheckCircle` + citation. Browser-verified with DACA/CA profile: steps 1 (Marketplace), 3 (5-year bar), 4 (APTC) show "not applicable"; steps 2 (Medicaid/CHIP) and 5 (Plan recommendation) show green check + citation.
+- **Fix 2 — Chat markdown rendering**: added `react-markdown@10` + `remark-gfm@4`; assistant messages now render with bullet/ordered lists, headers (h1–h3), bold, and inline code. User messages remain plain text. `Components` type from react-markdown used for full TypeScript coverage. Browser-verified: numbered list with bold lead text renders correctly; no console errors.
+- `npx tsc --noEmit`: zero errors after both changes.
+
 ## [2026-05-07] Phase 4 — EligibilityThinkingBanner + sessionStorage step persistence
 
 - Created `components/ui/EligibilityThinkingBanner.tsx` — reads `hb_thinking_steps` from sessionStorage; shows which of the 5 reasoning steps Gemma 4 verified (green checkmark + regulatory citation), leaving un-fired steps gray (correct for H-1B: step 3 / 5-year bar stays gray)
@@ -124,19 +130,19 @@ Migrated all 9 routes from `@anthropic-ai/sdk` to `lib/ai/client.ts`. Zero TypeS
 - Exports `extractJSON<T>(text, fallback)` — strips markdown fences, embedded JSON extraction, typed fallback
 - All calls include `AbortSignal.timeout(TIMEOUT_MS)` (default 30s, configurable via `OLLAMA_TIMEOUT_MS`)
 - All calls pass `think: false` to suppress Gemma 4's extended-thinking mode
-- Confirmed real response from `gemma4:26b` via streaming test ("Hello from Gemma")
-- **Hardware note:** `gemma4:26b` generates ~0.18 tok/s on this machine (CPU inference). Non-streaming calls require `OLLAMA_TIMEOUT_MS=120000` or higher. Streaming calls work within 30s (first token arrives in ~8s).
+- Confirmed real response from `gemma4:e4b` via streaming test ("Hello from Gemma")
+- **Hardware note:** `gemma4:e4b` generates ~0.18 tok/s on this machine (CPU inference). Non-streaming calls require `OLLAMA_TIMEOUT_MS=120000` or higher. Streaming calls work within 30s (first token arrives in ~8s).
 
 ---
 
 ## [2026-05-05] Project initialized — Gemma 4 migration scaffold created
 
-Built on top of existing HealthBridge codebase (commit `5fce665`). The original codebase has a fully working Next.js 14 app with Anthropic Claude API integration. This scaffold prepares it for migration to local Ollama inference with `gemma4:26b`.
+Built on top of existing HealthBridge codebase (commit `5fce665`). The original codebase has a fully working Next.js 14 app with Anthropic Claude API integration. This scaffold prepares it for migration to local Ollama inference with `gemma4:e4b`.
 
 **Files created:**
 - `CLAUDE.md` — session start checklist, workflow rules, self-improvement loop, project-specific Ollama rules
 - `.env` / `.env.example` — `OLLAMA_BASE_URL` and `OLLAMA_MODEL` environment variables
-- `requirements.txt` — hackathon judge reference: Ollama >= 0.6, gemma4:26b, Node >= 18
+- `requirements.txt` — hackathon judge reference: Ollama >= 0.6, gemma4:e4b, Node >= 18
 - `docs/ROADMAP.md` — four-phase migration plan (Ollama client → route migration → offline-first → polish)
 - `docs/project_spec.md` — product requirements and engineering rules
 - `docs/architecture.md` — system overview, data flows, component responsibilities for all 50+ files

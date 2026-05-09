@@ -70,7 +70,7 @@ Command pattern: use `mcp__context7__resolve-library-id` then `mcp__context7__ge
 ## Project-Specific Rules
 
 ### Ollama Configuration
-- Ollama runs at `http://localhost:11434`, model is `gemma4:26b`
+- Ollama runs at `http://localhost:11434`, model is `gemma4:e4b`
 - **Never hardcode** the base URL or model name anywhere in source code
 - Always read from environment variables:
   - `OLLAMA_BASE_URL` — the base URL
@@ -125,7 +125,7 @@ After every completed module, before marking a task done:
    ```
    ## [2026-05-05] Phase 1 — lib/ai/client.ts created
    - Created centralized Ollama wrapper with streaming and AbortSignal.timeout
-   - Confirmed gemma4:26b responding on localhost:11434
+   - Confirmed gemma4:e4b responding on localhost:11434
    ```
 3. Update `docs/project_status.md`:
    - Move completed item to "What's Done"
@@ -149,7 +149,7 @@ All deep-dive docs: `.planning/codebase/`
 ## Things to Never Do
 
 - Never call Ollama directly from a route file or component — always go through `lib/ai/client.ts`
-- Never hardcode `http://localhost:11434` or `gemma4:26b` — use environment variables
+- Never hardcode `http://localhost:11434` or `gemma4:e4b` — use environment variables
 - Never expose `OLLAMA_BASE_URL` or `OLLAMA_MODEL` to the client (`NEXT_PUBLIC_` prefix is forbidden for these)
 - Never skip `AbortSignal.timeout(30000)` on an Ollama call
 - Never skip Zod validation on API route input
