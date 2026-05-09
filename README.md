@@ -127,7 +127,7 @@ All AI calls route through `lib/ai/client.ts` — a centralized Ollama wrapper w
 
 The eligibility engine (`lib/eligibility/engine.ts`) is pure TypeScript with no AI dependency — all immigration status logic, 5-year bar calculations, state Medicaid waivers, and subsidy eligibility are deterministic rule-based computations with full legal citations.
 
-## Accuracy
+## Testing & known limitations
 
 The eligibility engine was validated against a 25-case test matrix covering the most common immigration status and income combinations. All 10 profiles in the core test matrix returned correct results after two bug fixes identified during testing:
 
