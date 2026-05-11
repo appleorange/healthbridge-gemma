@@ -85,7 +85,13 @@ export default function OnboardingPage() {
         const result = await res.json()
         if (!res.ok) {
           console.error('Eligibility API error:', result)
-          setSubmitError('Something went wrong calculating your eligibility. Please check all fields and try again.')
+          const missing = (result.details as { path: string[] }[] | undefined)
+            ?.map(d => d.path[d.path.length - 1])
+            .filter(Boolean)
+          const fieldHint = missing?.length
+            ? ` Missing: ${missing.join(', ')}.`
+            : ''
+          setSubmitError(`Please go back and make sure every required field is filled in.${fieldHint}`)
           setLoading(false)
           return
         }
