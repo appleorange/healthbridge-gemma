@@ -25,6 +25,7 @@ export default function OnboardingPage() {
     hasDependents: false,
   })
   const [loading, setLoading] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
   const [direction, setDirection] = useState<'forward' | 'backward'>('forward')
 
   const localizedSteps = getLocalizedSteps(lang)
@@ -73,6 +74,7 @@ export default function OnboardingPage() {
     setDirection('forward')
     if (isLast) {
       setLoading(true)
+      setSubmitError(null)
       try {
         const res = await fetch('/api/eligibility', {
           method: 'POST',
@@ -81,6 +83,12 @@ export default function OnboardingPage() {
           signal: AbortSignal.timeout(130000),
         })
         const result = await res.json()
+        if (!res.ok) {
+          console.error('Eligibility API error:', result)
+          setSubmitError('Something went wrong calculating your eligibility. Please check all fields and try again.')
+          setLoading(false)
+          return
+        }
         sessionStorage.setItem('hb_profile', JSON.stringify(profile))
         sessionStorage.setItem('hb_eligibility', JSON.stringify(result))
         // Clear stale thinking steps so the dashboard banner runs fresh
@@ -89,6 +97,7 @@ export default function OnboardingPage() {
         router.push('/dashboard')
       } catch (e) {
         console.error(e)
+        setSubmitError('Unable to reach the eligibility service. Make sure Ollama is running and try again.')
         setLoading(false)
       }
     } else {
@@ -291,8 +300,15 @@ export default function OnboardingPage() {
 
           </StepTransition>
 
+          {/* Submit error */}
+          {submitError && (
+            <p className="mt-6 text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+              {submitError}
+            </p>
+          )}
+
           {/* Navigation */}
-          <div className="flex gap-3 mt-10">
+          <div className="flex gap-3 mt-4">
             <button onClick={handleBack} className="btn-secondary flex items-center gap-2">
               <ChevronLeft className="w-4 h-4" /> {lang === 'es' ? ES_UI.back : 'Back'}
             </button>
