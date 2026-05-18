@@ -98,6 +98,8 @@ OLLAMA_THINKING_TIMEOUT_MS=180000
 
 ### 4. Run
 
+The launcher scripts start the dev server and open the app automatically in your browser.
+
 Mac/Linux:
 ```bash
 chmod +x start.sh
