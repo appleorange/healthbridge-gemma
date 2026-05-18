@@ -47,6 +47,7 @@ tsconfig.tsbuildinfo
 .gstack/
 
 # Local planning and working files
+.planning/
 docs/
 .claude/
 CLAUDE.md
