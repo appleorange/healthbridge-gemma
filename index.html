@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HealthBridge — Local AI Health Insurance Navigator</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --green-50:  #f4f6f0;
+      --green-100: #dad7cd;
+      --green-300: #a3b18a;
+      --green-500: #588157;
+      --green-600: #3a5a40;
+      --green-700: #344e41;
+      --off-white: #eeeee8;
+      --text-dark: #1a2820;
+      --text-mid:  #3a5a40;
+      --text-muted:#6b7c72;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      background: var(--off-white);
+      color: var(--text-dark);
+      line-height: 1.6;
+    }
+
+    /* ── HERO ─────────────────────────────────────────────────────────── */
+    header {
+      background: var(--green-700);
+      color: #fff;
+      text-align: center;
+      padding: 72px 24px 64px;
+    }
+
+    .badge {
+      display: inline-block;
+      background: rgba(255,255,255,.12);
+      border: 1px solid rgba(255,255,255,.2);
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      padding: 4px 14px;
+      margin-bottom: 24px;
+      color: rgba(255,255,255,.85);
+    }
+
+    header h1 {
+      font-size: clamp(2rem, 5vw, 3.25rem);
+      font-weight: 700;
+      letter-spacing: -.02em;
+      margin-bottom: 16px;
+    }
+
+    header h1 span {
+      color: #a3b18a;
+    }
+
+    header p.tagline {
+      font-size: clamp(1rem, 2.5vw, 1.2rem);
+      color: rgba(255,255,255,.75);
+      max-width: 520px;
+      margin: 0 auto 36px;
+    }
+
+    .hero-buttons {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #fff;
+      color: var(--green-700);
+      font-weight: 600;
+      font-size: 15px;
+      padding: 12px 24px;
+      border-radius: 10px;
+      text-decoration: none;
+      transition: opacity .15s;
+    }
+    .btn-primary:hover { opacity: .88; }
+
+    .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: transparent;
+      color: #fff;
+      font-weight: 600;
+      font-size: 15px;
+      padding: 12px 24px;
+      border-radius: 10px;
+      border: 1.5px solid rgba(255,255,255,.35);
+      text-decoration: none;
+      transition: border-color .15s, background .15s;
+    }
+    .btn-secondary:hover { border-color: rgba(255,255,255,.65); background: rgba(255,255,255,.06); }
+
+    /* ── PRIVACY BAR ──────────────────────────────────────────────────── */
+    .privacy-bar {
+      background: var(--green-600);
+      text-align: center;
+      padding: 10px 24px;
+      font-size: 13px;
+      font-weight: 500;
+      color: rgba(255,255,255,.8);
+      letter-spacing: .01em;
+    }
+
+    .privacy-bar span {
+      margin: 0 8px;
+      opacity: .4;
+    }
+
+    /* ── SECTION WRAPPER ──────────────────────────────────────────────── */
+    section {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 64px 24px;
+    }
+
+    section + section {
+      padding-top: 0;
+    }
+
+    h2 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--green-700);
+      margin-bottom: 32px;
+      letter-spacing: -.01em;
+    }
+
+    /* ── DESCRIPTION ──────────────────────────────────────────────────── */
+    .description {
+      background: #fff;
+      border: 1px solid #e0e4db;
+      border-radius: 16px;
+      padding: 36px 40px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .description p {
+      font-size: 1.05rem;
+      color: #334238;
+      line-height: 1.75;
+    }
+
+    /* ── SCREENSHOTS ──────────────────────────────────────────────────── */
+    .screenshots {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+    }
+
+    .screenshot {
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid #d4d9ce;
+      background: #fff;
+      box-shadow: 0 2px 8px rgba(52,78,65,.08);
+    }
+
+    .screenshot img {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    /* placeholder shown when the <img> src is missing */
+    .screenshot-placeholder {
+      height: 180px;
+      background: var(--green-50);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      color: var(--green-300);
+    }
+
+    .screenshot-placeholder svg {
+      opacity: .5;
+    }
+
+    .screenshot-placeholder span {
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+
+    .screenshot figcaption {
+      padding: 10px 14px 12px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-muted);
+      border-top: 1px solid #eef0eb;
+    }
+
+    /* ── SETUP ────────────────────────────────────────────────────────── */
+    .setup-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .step {
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+      background: #fff;
+      border: 1px solid #e0e4db;
+      border-radius: 12px;
+      padding: 20px 24px;
+    }
+
+    .step-num {
+      flex-shrink: 0;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--green-600);
+      color: #fff;
+      font-weight: 700;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 1px;
+    }
+
+    .step-body {
+      flex: 1;
+    }
+
+    .step-body p {
+      font-size: 15px;
+      color: var(--text-dark);
+      line-height: 1.5;
+    }
+
+    .step-body a {
+      color: var(--green-600);
+      font-weight: 600;
+      text-decoration: none;
+    }
+    .step-body a:hover { text-decoration: underline; }
+
+    .step-body code {
+      display: inline-block;
+      margin-top: 8px;
+      background: #f4f6f0;
+      border: 1px solid #d4d9ce;
+      border-radius: 7px;
+      padding: 7px 14px;
+      font-family: "SF Mono", ui-monospace, "Cascadia Code", monospace;
+      font-size: 13.5px;
+      color: var(--green-700);
+      letter-spacing: .01em;
+    }
+
+    /* ── FOOTER ───────────────────────────────────────────────────────── */
+    footer {
+      border-top: 1px solid #d4d9ce;
+      text-align: center;
+      padding: 32px 24px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    footer a {
+      color: var(--green-600);
+      font-weight: 600;
+      text-decoration: none;
+    }
+    footer a:hover { text-decoration: underline; }
+
+    /* ── RESPONSIVE ───────────────────────────────────────────────────── */
+    @media (max-width: 600px) {
+      header { padding: 52px 20px 48px; }
+      .description { padding: 24px; }
+      .step { padding: 16px 18px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HERO -->
+  <header>
+    <div class="badge">Hackathon Submission</div>
+    <h1>Health<span>Bridge</span></h1>
+    <p class="tagline">Local AI health insurance navigator for immigrants</p>
+    <div class="hero-buttons">
+      <a class="btn-primary" href="https://github.com/appleorange/healthbridge-gemma" target="_blank" rel="noopener">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.604-3.369-1.341-3.369-1.341-.454-1.154-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0 1 12 6.836a9.59 9.59 0 0 1 2.504.337c1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.579.688.481C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
+        View on GitHub
+      </a>
+      <a class="btn-secondary" href="#setup">Get Started</a>
+    </div>
+  </header>
+
+  <!-- PRIVACY BAR -->
+  <div class="privacy-bar">
+    🔒 &nbsp;Runs entirely on your device. No data sent anywhere.
+    <span>·</span>
+    Powered by Ollama + Gemma 4
+  </div>
+
+  <!-- DESCRIPTION -->
+  <section>
+    <div class="description">
+      <p>HealthBridge is an AI-powered health insurance navigator built for US immigrants and visa holders. Answer a short questionnaire about your immigration status, income, and situation — and get a personalized insurance recommendation, real ACA plan comparisons, an enrollment timeline, and tools to parse documents, check provider networks, and appeal claim denials.</p>
+      <p style="margin-top:16px;">Everything runs locally via Ollama with Gemma 4. No account, no cloud API, no data collection — your immigration status and health information stay on your device.</p>
+    </div>
+  </section>
+
+  <!-- SCREENSHOTS -->
+  <section>
+    <h2>Screenshots</h2>
+    <div class="screenshots">
+
+      <figure class="screenshot">
+        <img src="screenshots/onboarding.png" alt="Onboarding questionnaire"
+             onerror="this.parentNode.replaceChild(Object.assign(document.createElement('div'),{className:'screenshot-placeholder',innerHTML:'<svg width=32 height=32 viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'1.5\'><rect x=\'3\' y=\'3\' width=\'18\' height=\'18\' rx=\'2\'/><path d=\'M3 9h18M9 21V9\'/></svg><span>onboarding.png</span>'}),this)" />
+        <figcaption>Onboarding questionnaire</figcaption>
+      </figure>
+
+      <figure class="screenshot">
+        <img src="screenshots/dashboard.png" alt="Dashboard overview"
+             onerror="this.parentNode.replaceChild(Object.assign(document.createElement('div'),{className:'screenshot-placeholder',innerHTML:'<svg width=32 height=32 viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'1.5\'><rect x=\'3\' y=\'3\' width=\'18\' height=\'18\' rx=\'2\'/><path d=\'M3 9h18M9 21V9\'/></svg><span>dashboard.png</span>'}),this)" />
+        <figcaption>Eligibility results &amp; plan recommendation</figcaption>
+      </figure>
+
+      <figure class="screenshot">
+        <img src="screenshots/chat.png" alt="AI chat assistant"
+             onerror="this.parentNode.replaceChild(Object.assign(document.createElement('div'),{className:'screenshot-placeholder',innerHTML:'<svg width=32 height=32 viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'1.5\'><rect x=\'3\' y=\'3\' width=\'18\' height=\'18\' rx=\'2\'/><path d=\'M3 9h18M9 21V9\'/></svg><span>chat.png</span>'}),this)" />
+        <figcaption>AI chat assistant</figcaption>
+      </figure>
+
+      <figure class="screenshot">
+        <img src="screenshots/plans.png" alt="ACA plan comparison"
+             onerror="this.parentNode.replaceChild(Object.assign(document.createElement('div'),{className:'screenshot-placeholder',innerHTML:'<svg width=32 height=32 viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'1.5\'><rect x=\'3\' y=\'3\' width=\'18\' height=\'18\' rx=\'2\'/><path d=\'M3 9h18M9 21V9\'/></svg><span>plans.png</span>'}),this)" />
+        <figcaption>ACA plan comparison &amp; fit scores</figcaption>
+      </figure>
+
+    </div>
+  </section>
+
+  <!-- SETUP -->
+  <section id="setup">
+    <h2>Get started</h2>
+    <div class="setup-steps">
+
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <p>Install Ollama from <a href="https://ollama.com" target="_blank" rel="noopener">ollama.com</a></p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <p>Pull the model</p>
+          <code>ollama pull gemma4:e4b</code>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <p>Clone the repo and install dependencies</p>
+          <code>git clone https://github.com/appleorange/healthbridge-gemma &amp;&amp; cd healthbridge-gemma &amp;&amp; npm install</code>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <p>Start the app and open <a href="http://localhost:3000" target="_blank" rel="noopener">localhost:3000</a></p>
+          <code>npm run dev</code>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <a href="https://github.com/appleorange/healthbridge-gemma" target="_blank" rel="noopener">github.com/appleorange/healthbridge-gemma</a>
+    &nbsp;·&nbsp;
+    Built with Next.js, Ollama, and Gemma 4
+  </footer>
+
+</body>
+</html>

@@ -59,7 +59,7 @@ export const UserProfileSchema = z.object({
   parentPlanPremiumContribution: z.enum(['0', 'under_100', '100_to_300', 'over_300', 'unknown']).optional(),
   parentPlanSatisfied: z.enum(['very_happy', 'somewhat_happy', 'unhappy']).optional(),
   agingOffDate: z.enum(['over_2_years', '1_to_2_years', 'under_1_year', 'already_aged_off', 'unknown']).optional(),
-  yearsAsLPR: z.number().min(0).max(50).optional(),
+  yearsAsLPR: z.coerce.number().min(0).max(50).optional(),
   // Optional health fields
   expectedHealthcareUsage: z.enum(['minimal', 'moderate', 'high']).optional(),
   takesRegularMedications: z.boolean().optional(),
