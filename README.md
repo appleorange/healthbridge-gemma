@@ -100,11 +100,23 @@ OLLAMA_THINKING_TIMEOUT_MS=180000
 
 ### 4. Run
 
+Mac/Linux:
+```bash
+chmod +x start.sh
+./start.sh
+```
+
+Windows:
+```bat
+start.bat
+```
+
+Or manually:
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open http://localhost:3000
 
 ## Testing offline mode
 
