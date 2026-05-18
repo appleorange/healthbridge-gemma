@@ -2,8 +2,6 @@
 
 A health insurance navigator for immigrants and visa holders in the United States — powered by Gemma 4, running entirely on your device.
 
-![HealthBridge Dashboard](screenshots/dashboard.png)
-
 ## The problem
 
 There are 45 million immigrants in the US — on green cards, work visas, DACA, TPS, and many without documentation. Every single one faces a different set of health insurance eligibility rules. Most have no idea where to start.
@@ -160,14 +158,6 @@ Known limitations:
 - **Validation**: Zod on all API routes
 - **External data**: Healthcare.gov CMS API with local cache fallback
 - **Language support**: English, Spanish
-
-## Screenshots
-
-| | |
-|---|---|
-| ![Landing](screenshots/landing.png) | ![Onboarding](screenshots/onboarding.png) |
-| ![Recommendation](screenshots/recommendation.png) | ![Dashboard](screenshots/dashboard.png) |
-| ![Offline](screenshots/offline.png) | ![Chat](screenshots/chat.png) |
 
 ## Hackathon
 
